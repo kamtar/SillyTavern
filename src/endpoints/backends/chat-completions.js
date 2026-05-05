@@ -89,6 +89,7 @@ const API_FIREWORKS = 'https://api.fireworks.ai/inference/v1';
 const API_COMETAPI = 'https://api.cometapi.com/v1';
 const API_ZAI_COMMON = 'https://api.z.ai/api/paas/v4';
 const API_ZAI_CODING = 'https://api.z.ai/api/coding/paas/v4';
+const MAX_KOBOLDCPP_IMAGES = 4;
 const API_SILICONFLOW = 'https://api.siliconflow.com/v1';
 const API_SILICONFLOW_CN = 'https://api.siliconflow.cn/v1';
 const API_MINIMAX = 'https://api.minimax.io/v1';
@@ -2559,7 +2560,7 @@ router.post('/generate', async function (request, response) {
                 && request.body.chat_completion_source === CHAT_COMPLETION_SOURCES.CUSTOM
                 && /^koboldcpp\/(.+)$/.test(request.body.model)
                 && inlineImages.length > 0
-                ? inlineImages.slice(-4)
+                ? inlineImages.slice(-MAX_KOBOLDCPP_IMAGES)
                 : undefined,
             'model': request.body.model,
             'temperature': request.body.temperature,

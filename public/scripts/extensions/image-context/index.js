@@ -8,6 +8,7 @@ import { MEDIA_DISPLAY, MEDIA_TYPE, SCROLL_BEHAVIOR } from '../../constants.js';
 const MODULE_NAME = 'image-context';
 const CHAT_COMPLETION_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO]);
 const TEXT_COMPLETION_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE]);
+const MAX_KOBOLDCPP_IMAGES = 4;
 
 function isChatCompletionKoboldCppActive() {
     return main_api === 'openai'
@@ -136,7 +137,7 @@ function getIncludedTextCompletionAttachments() {
     return getContext().chat
         .flatMap(message => getMessageMediaForContext(message))
         .filter(mediaAttachment => mediaAttachment?.include_in_context === true && shouldManageAttachment(mediaAttachment))
-        .slice(-4);
+        .slice(-MAX_KOBOLDCPP_IMAGES);
 }
 
 async function convertAttachmentToBase64(mediaAttachment) {
