@@ -1,0 +1,7 @@
+.mes_media_include_in_context {
+    display: none;
+}
+
+body.image_context_supported .mes_media_include_in_context {
+    display: block;
+}

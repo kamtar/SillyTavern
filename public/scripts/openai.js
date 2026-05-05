@@ -958,6 +958,9 @@ async function populateChatHistory(messages, prompts, chatCompletion, type = nul
             if (!media || !media.url) {
                 return;
             }
+            if (media.include_in_context === false) {
+                return;
+            }
             if (!media.type) {
                 media.type = MEDIA_TYPE.IMAGE;
             }
