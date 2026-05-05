@@ -36,6 +36,7 @@ import {
     convertClaudeMessages,
     convertGooglePrompt,
     convertTextCompletionPrompt,
+    extractBase64ImagesFromMessages,
     convertCohereMessages,
     convertMistralMessages,
     convertAI21Messages,
@@ -2157,6 +2158,7 @@ router.post('/bias', async function (request, response) {
 router.post('/generate', async function (request, response) {
     try {
         if (!request.body) return response.status(400).send({ error: true });
+        const inlineImages = Array.isArray(request.body.messages) ? extractBase64ImagesFromMessages(request.body.messages) : [];
 
         const postProcessingType = request.body.custom_prompt_post_processing;
         if (Array.isArray(request.body.messages) && postProcessingType) {
@@ -2553,6 +2555,12 @@ router.post('/generate', async function (request, response) {
         const requestBody = {
             'messages': isTextCompletion === false ? request.body.messages : undefined,
             'prompt': isTextCompletion === true ? textPrompt : undefined,
+            'images': isTextCompletion === true
+                && request.body.chat_completion_source === CHAT_COMPLETION_SOURCES.CUSTOM
+                && /^koboldcpp\/(.+)$/.test(request.body.model)
+                && inlineImages.length > 0
+                ? inlineImages.slice(-4)
+                : undefined,
             'model': request.body.model,
             'temperature': request.body.temperature,
             'max_tokens': request.body.max_tokens,

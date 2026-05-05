@@ -961,15 +961,50 @@ export function convertTextCompletionPrompt(messages) {
 
     const messageStrings = [];
     messages.forEach(m => {
+        const content = extractTextContentFromMessage(m?.content);
         if (m.role === 'system' && m.name === undefined) {
-            messageStrings.push('System: ' + m.content);
+            messageStrings.push('System: ' + content);
         } else if (m.role === 'system' && m.name !== undefined) {
-            messageStrings.push(m.name + ': ' + m.content);
+            messageStrings.push(m.name + ': ' + content);
         } else {
-            messageStrings.push(m.role + ': ' + m.content);
+            messageStrings.push(m.role + ': ' + content);
         }
     });
     return messageStrings.join('\n') + '\nassistant:';
+}
+
+export function extractTextContentFromMessage(content) {
+    if (typeof content === 'string') {
+        return content;
+    }
+
+    if (Array.isArray(content)) {
+        return content
+            .filter(part => part?.type === 'text' && typeof part.text === 'string')
+            .map(part => part.text)
+            .join('');
+    }
+
+    return String(content ?? '');
+}
+
+export function extractBase64ImagesFromMessages(messages) {
+    if (!Array.isArray(messages)) {
+        return [];
+    }
+
+    return messages.flatMap(message => {
+        if (!Array.isArray(message?.content)) {
+            return [];
+        }
+
+        return message.content.flatMap(part => {
+            const url = part?.type === 'image_url' ? part?.image_url?.url : null;
+            return typeof url === 'string' && url.startsWith('data:image') && url.includes(',')
+                ? [url.split(',', 2)[1]]
+                : [];
+        });
+    });
 }
 
 /**
