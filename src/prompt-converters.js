@@ -961,13 +961,13 @@ export function convertTextCompletionPrompt(messages) {
 
     const messageStrings = [];
     messages.forEach(m => {
-        const content = extractTextContentFromMessage(m?.content);
+        const textContent = extractTextContentFromMessage(m?.content);
         if (m.role === 'system' && m.name === undefined) {
-            messageStrings.push('System: ' + content);
+            messageStrings.push('System: ' + textContent);
         } else if (m.role === 'system' && m.name !== undefined) {
-            messageStrings.push(m.name + ': ' + content);
+            messageStrings.push(m.name + ': ' + textContent);
         } else {
-            messageStrings.push(m.role + ': ' + content);
+            messageStrings.push(m.role + ': ' + textContent);
         }
     });
     return messageStrings.join('\n') + '\nassistant:';
@@ -1000,14 +1000,18 @@ export function extractBase64ImagesFromMessages(messages) {
 
         return message.content.flatMap(part => {
             const url = part?.type === 'image_url' ? part?.image_url?.url : null;
-            if (typeof url !== 'string' || !url.startsWith('data:image') || !url.includes(',')) {
-                return [];
-            }
-
-            const [, base64] = url.split(',', 2);
+            const base64 = extractBase64FromDataUrl(url);
             return base64 ? [base64] : [];
         });
     });
+}
+
+function extractBase64FromDataUrl(url) {
+    if (typeof url !== 'string' || !url.startsWith('data:image') || !url.includes(',')) {
+        return null;
+    }
+
+    return url.split(',', 2)[1] || null;
 }
 
 /**

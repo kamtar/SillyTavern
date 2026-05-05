@@ -140,13 +140,18 @@ function getIncludedTextCompletionAttachments() {
         .slice(-MAX_KOBOLDCPP_IMAGES);
 }
 
+function extractBase64FromDataUrl(url) {
+    return isDataURL(url) ? url.split(',', 2)[1] || null : null;
+}
+
 async function convertAttachmentToBase64(mediaAttachment) {
     if (!mediaAttachment?.url) {
         return null;
     }
 
-    if (isDataURL(mediaAttachment.url)) {
-        return mediaAttachment.url.split(',', 2)[1] || null;
+    const base64 = extractBase64FromDataUrl(mediaAttachment.url);
+    if (base64) {
+        return base64;
     }
 
     try {
@@ -157,7 +162,7 @@ async function convertAttachmentToBase64(mediaAttachment) {
 
         const blob = await response.blob();
         const dataUrl = await getBase64Async(blob);
-        return dataUrl.split(',', 2)[1] || null;
+        return extractBase64FromDataUrl(dataUrl);
     } catch (error) {
         console.error('Image context attachment skipped', error);
         return null;
