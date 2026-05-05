@@ -961,15 +961,57 @@ export function convertTextCompletionPrompt(messages) {
 
     const messageStrings = [];
     messages.forEach(m => {
+        const textContent = extractTextContentFromMessage(m?.content);
         if (m.role === 'system' && m.name === undefined) {
-            messageStrings.push('System: ' + m.content);
+            messageStrings.push('System: ' + textContent);
         } else if (m.role === 'system' && m.name !== undefined) {
-            messageStrings.push(m.name + ': ' + m.content);
+            messageStrings.push(m.name + ': ' + textContent);
         } else {
-            messageStrings.push(m.role + ': ' + m.content);
+            messageStrings.push(m.role + ': ' + textContent);
         }
     });
     return messageStrings.join('\n') + '\nassistant:';
+}
+
+export function extractTextContentFromMessage(content) {
+    if (typeof content === 'string') {
+        return content;
+    }
+
+    if (Array.isArray(content)) {
+        return content
+            .filter(part => part?.type === 'text' && typeof part.text === 'string')
+            .map(part => part.text)
+            .join('');
+    }
+
+    return String(content ?? '');
+}
+
+export function extractBase64ImagesFromMessages(messages) {
+    if (!Array.isArray(messages)) {
+        return [];
+    }
+
+    return messages.flatMap(message => {
+        if (!Array.isArray(message?.content)) {
+            return [];
+        }
+
+        return message.content.flatMap(part => {
+            const url = part?.type === 'image_url' ? part?.image_url?.url : null;
+            const base64 = extractBase64FromDataUrl(url);
+            return base64 ? [base64] : [];
+        });
+    });
+}
+
+function extractBase64FromDataUrl(url) {
+    if (typeof url !== 'string' || !url.startsWith('data:image') || !url.includes(',')) {
+        return null;
+    }
+
+    return url.split(',', 2)[1] || null;
 }
 
 /**

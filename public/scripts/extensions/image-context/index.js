@@ -1,15 +1,40 @@
-import { appendMediaToMessage, eventSource, event_types, main_api, saveChatConditional } from '../../../script.js';
+import { appendMediaToMessage, eventSource, event_types, getMediaDisplay, getMediaIndex, main_api, saveChatConditional } from '../../../script.js';
 import { getContext } from '../../extensions.js';
 import { chat_completion_sources, getChatCompletionModel, oai_settings } from '../../openai.js';
-import { MEDIA_TYPE, SCROLL_BEHAVIOR } from '../../constants.js';
+import { textgen_types, textgenerationwebui_settings } from '../../textgen-settings.js';
+import { getBase64Async, isDataURL } from '../../utils.js';
+import { MEDIA_DISPLAY, MEDIA_TYPE, SCROLL_BEHAVIOR } from '../../constants.js';
 
 const MODULE_NAME = 'image-context';
-const SUPPORTED_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO]);
+const CHAT_COMPLETION_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO]);
+const TEXT_COMPLETION_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE]);
+const MAX_KOBOLDCPP_IMAGES = 4;
 
-function isKoboldCppMultimodalActive() {
+function isChatCompletionKoboldCppActive() {
     return main_api === 'openai'
         && oai_settings.chat_completion_source === chat_completion_sources.CUSTOM
         && /^koboldcpp\/.+/.test(getChatCompletionModel() || '');
+}
+
+function isTextCompletionKoboldCppActive() {
+    return main_api === 'textgenerationwebui'
+        && textgenerationwebui_settings.type === textgen_types.KOBOLDCPP;
+}
+
+function getSupportedMediaTypes() {
+    if (isChatCompletionKoboldCppActive()) {
+        return CHAT_COMPLETION_MEDIA_TYPES;
+    }
+
+    if (isTextCompletionKoboldCppActive()) {
+        return TEXT_COMPLETION_MEDIA_TYPES;
+    }
+
+    return new Set();
+}
+
+function isKoboldCppMultimodalActive() {
+    return isChatCompletionKoboldCppActive() || isTextCompletionKoboldCppActive();
 }
 
 function syncBodyClass() {
@@ -18,7 +43,7 @@ function syncBodyClass() {
 
 function shouldManageAttachment(mediaAttachment) {
     const mediaType = mediaAttachment?.type || MEDIA_TYPE.IMAGE;
-    return Boolean(mediaAttachment?.url) && SUPPORTED_MEDIA_TYPES.has(mediaType);
+    return Boolean(mediaAttachment?.url) && getSupportedMediaTypes().has(mediaType);
 }
 
 function ensureAttachmentContextState(mediaAttachment) {
@@ -95,14 +120,85 @@ async function handleMessageMedia(messageId) {
     await saveChatConditional();
 }
 
+function getMessageMediaForContext(message) {
+    if (!Array.isArray(message?.extra?.media) || message.extra.media.length === 0) {
+        return [];
+    }
+
+    if (getMediaDisplay(message) === MEDIA_DISPLAY.GALLERY) {
+        const mediaAttachment = message.extra.media[getMediaIndex(message)];
+        return mediaAttachment ? [mediaAttachment] : [];
+    }
+
+    return message.extra.media;
+}
+
+function getIncludedTextCompletionAttachments() {
+    return getContext().chat
+        .flatMap(message => getMessageMediaForContext(message))
+        .filter(mediaAttachment => mediaAttachment?.include_in_context === true && shouldManageAttachment(mediaAttachment))
+        .slice(-MAX_KOBOLDCPP_IMAGES);
+}
+
+function extractBase64FromDataUrl(url) {
+    return isDataURL(url) ? url.split(',', 2)[1] || null : null;
+}
+
+async function convertAttachmentToBase64(mediaAttachment) {
+    if (!mediaAttachment?.url) {
+        return null;
+    }
+
+    const base64 = extractBase64FromDataUrl(mediaAttachment.url);
+    if (base64) {
+        return base64;
+    }
+
+    try {
+        const response = await fetch(mediaAttachment.url, { method: 'GET', cache: 'force-cache' });
+        if (!response.ok) {
+            throw new Error('Failed to fetch image');
+        }
+
+        const blob = await response.blob();
+        const dataUrl = await getBase64Async(blob);
+        return extractBase64FromDataUrl(dataUrl);
+    } catch (error) {
+        console.error('Image context attachment skipped', error);
+        return null;
+    }
+}
+
+async function applyTextCompletionMedia(params) {
+    if (!isTextCompletionKoboldCppActive()) {
+        return;
+    }
+
+    const attachments = getIncludedTextCompletionAttachments();
+    if (attachments.length === 0) {
+        delete params.images;
+        return;
+    }
+
+    const images = (await Promise.all(attachments.map(convertAttachmentToBase64))).filter(Boolean);
+
+    if (images.length > 0) {
+        params.images = images;
+    } else {
+        delete params.images;
+    }
+}
+
 export async function init() {
     syncBodyClass();
 
     eventSource.on(event_types.APP_READY, () => initializeChatMedia({ save: true, rerender: true }));
     eventSource.on(event_types.CHAT_CHANGED, () => initializeChatMedia({ save: true, rerender: true }));
     eventSource.on(event_types.ONLINE_STATUS_CHANGED, () => initializeChatMedia({ save: true, rerender: true }));
+    eventSource.on(event_types.MAIN_API_CHANGED, () => initializeChatMedia({ save: true, rerender: true }));
     eventSource.on(event_types.MESSAGE_SENT, handleMessageMedia);
     eventSource.on(event_types.MESSAGE_FILE_EMBEDDED, handleMessageMedia);
+    eventSource.on(event_types.TEXT_COMPLETION_SETTINGS_READY, applyTextCompletionMedia);
 
     $(document).on('click', '.mes_media_include_in_context', async function () {
         if (!isKoboldCppMultimodalActive()) {

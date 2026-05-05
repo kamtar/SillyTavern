@@ -36,6 +36,7 @@ import {
     convertClaudeMessages,
     convertGooglePrompt,
     convertTextCompletionPrompt,
+    extractBase64ImagesFromMessages,
     convertCohereMessages,
     convertMistralMessages,
     convertAI21Messages,
@@ -88,6 +89,7 @@ const API_FIREWORKS = 'https://api.fireworks.ai/inference/v1';
 const API_COMETAPI = 'https://api.cometapi.com/v1';
 const API_ZAI_COMMON = 'https://api.z.ai/api/paas/v4';
 const API_ZAI_CODING = 'https://api.z.ai/api/coding/paas/v4';
+const MAX_KOBOLDCPP_IMAGES = 4;
 const API_SILICONFLOW = 'https://api.siliconflow.com/v1';
 const API_SILICONFLOW_CN = 'https://api.siliconflow.cn/v1';
 const API_MINIMAX = 'https://api.minimax.io/v1';
@@ -2157,6 +2159,7 @@ router.post('/bias', async function (request, response) {
 router.post('/generate', async function (request, response) {
     try {
         if (!request.body) return response.status(400).send({ error: true });
+        const inlineImages = Array.isArray(request.body.messages) ? extractBase64ImagesFromMessages(request.body.messages) : [];
 
         const postProcessingType = request.body.custom_prompt_post_processing;
         if (Array.isArray(request.body.messages) && postProcessingType) {
@@ -2553,6 +2556,12 @@ router.post('/generate', async function (request, response) {
         const requestBody = {
             'messages': isTextCompletion === false ? request.body.messages : undefined,
             'prompt': isTextCompletion === true ? textPrompt : undefined,
+            'images': isTextCompletion === true
+                && request.body.chat_completion_source === CHAT_COMPLETION_SOURCES.CUSTOM
+                && /^koboldcpp\/(.+)$/.test(request.body.model)
+                && inlineImages.length > 0
+                ? inlineImages.slice(-MAX_KOBOLDCPP_IMAGES)
+                : undefined,
             'model': request.body.model,
             'temperature': request.body.temperature,
             'max_tokens': request.body.max_tokens,

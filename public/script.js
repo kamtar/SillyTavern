@@ -2200,8 +2200,10 @@ export function appendMediaToMessage(mes, messageElement, scrollBehavior = SCROL
     function appendImageAttachment(attachment, index) {
         const template = $('#message_image_template .mes_img_container').clone();
         template.attr('data-index', index);
+        const canIncludeInContext = attachment.include_in_context !== undefined;
         const includeInContext = attachment.include_in_context === true;
         template.find('.mes_media_include_in_context')
+            .toggle(canIncludeInContext)
             .toggleClass('active', includeInContext)
             .attr('title', includeInContext ? t`Remove from multimodal context` : t`Add to multimodal context`);
 
@@ -2240,8 +2242,10 @@ export function appendMediaToMessage(mes, messageElement, scrollBehavior = SCROL
     function appendVideoAttachment(attachment, index) {
         const template = $('#message_video_template .mes_video_container').clone();
         template.attr('data-index', index);
+        const canIncludeInContext = attachment.include_in_context !== undefined;
         const includeInContext = attachment.include_in_context === true;
         template.find('.mes_media_include_in_context')
+            .toggle(canIncludeInContext)
             .toggleClass('active', includeInContext)
             .attr('title', includeInContext ? t`Remove from multimodal context` : t`Add to multimodal context`);
 
