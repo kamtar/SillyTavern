@@ -120,7 +120,7 @@ export async function init() {
             return;
         }
 
-        mediaAttachment.include_in_context = !Boolean(mediaAttachment.include_in_context);
+        mediaAttachment.include_in_context = !mediaAttachment.include_in_context;
         appendMediaToMessage(message, messageBlock, SCROLL_BEHAVIOR.KEEP);
         await saveChatConditional();
     });
