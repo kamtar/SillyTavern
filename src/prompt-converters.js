@@ -1000,9 +1000,12 @@ export function extractBase64ImagesFromMessages(messages) {
 
         return message.content.flatMap(part => {
             const url = part?.type === 'image_url' ? part?.image_url?.url : null;
-            return typeof url === 'string' && url.startsWith('data:image') && url.includes(',')
-                ? [url.split(',', 2)[1]]
-                : [];
+            if (typeof url !== 'string' || !url.startsWith('data:image') || !url.includes(',')) {
+                return [];
+            }
+
+            const [, base64] = url.split(',', 2);
+            return base64 ? [base64] : [];
         });
     });
 }
