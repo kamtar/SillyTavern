@@ -163,6 +163,16 @@
                     </aside>
                     <div class="story_workshop_card story_workshop_agent_editor">
                         <div class="story_workshop_card_title">
+                            <b>Shared instructions</b>
+                            <button id="story_workshop_save_shared_system" class="menu_button">Save shared prompt</button>
+                        </div>
+                        <p class="story_workshop_hint">
+                            Sent as the system prompt to every Story Workshop helper. Agents below have only a task prompt, so they all follow the same core rules.
+                        </p>
+                        <label for="story_workshop_shared_system">Shared system prompt</label>
+                        <textarea id="story_workshop_shared_system" class="text_pole" rows="7"></textarea>
+                        <hr>
+                        <div class="story_workshop_card_title">
                             <b>Edit selected agent</b>
                             <div>
                                 <button id="story_workshop_new_agent" class="menu_button">New agent</button>
@@ -177,10 +187,8 @@
                         <input id="story_workshop_agent_name" class="text_pole" type="text">
                         <label for="story_workshop_agent_category">Category</label>
                         <input id="story_workshop_agent_category" class="text_pole" type="text">
-                        <label for="story_workshop_agent_system">System prompt</label>
-                        <textarea id="story_workshop_agent_system" class="text_pole" rows="8"></textarea>
                         <label for="story_workshop_agent_task">Task prompt</label>
-                        <textarea id="story_workshop_agent_task" class="text_pole" rows="6"></textarea>
+                        <textarea id="story_workshop_agent_task" class="text_pole" rows="8"></textarea>
                         <div class="story_workshop_inline_fields">
                             <label>Recent messages
                                 <input id="story_workshop_agent_recent" class="text_pole" type="number" min="0" max="100">

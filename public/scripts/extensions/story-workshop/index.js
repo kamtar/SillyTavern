@@ -21,7 +21,7 @@ const MODULE_NAME = 'story-workshop';
 const SETTINGS_KEY = 'storyWorkshop';
 const METADATA_KEY = 'storyWorkshop';
 const INJECTION_KEY = 'story_workshop_control';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const MAX_HISTORY = 20;
 const DEFAULT_TOOLBAR_ACTIONS = [
     { agentId: 'arc.designer', label: 'Arc', icon: 'fa-solid fa-route', order: 5 },
@@ -55,7 +55,6 @@ function makeAgent(id, name, category, taskPrompt, options = {}) {
         name,
         category,
         enabled: true,
-        systemPrompt: options.systemPrompt || BASE_SYSTEM,
         taskPrompt,
         recentMessages: options.recentMessages ?? 10,
         responseTokens: options.responseTokens ?? 450,
@@ -165,6 +164,9 @@ function getSettings() {
 
     const settings = extension_settings[SETTINGS_KEY];
     settings.schemaVersion ??= SCHEMA_VERSION;
+    // One shared system layer keeps every helper aligned. Agent presets provide
+    // only their narrowly-scoped task prompt, context limits, and destination.
+    settings.sharedSystemPrompt ??= BASE_SYSTEM;
     settings.injectState ??= false;
     settings.assistMode ??= 'suggest';
     settings.assistEvery ??= 4;
@@ -182,6 +184,12 @@ function getSettings() {
         if (!settings.agents.some(agent => agent.id === builtIn.id)) {
             settings.agents.push(clone(builtIn));
         }
+    }
+    // v1 stored a system prompt on every agent. It is deliberately discarded:
+    // system instructions now live in one explicit, shared setting.
+    for (const agent of settings.agents) {
+        delete agent.systemPrompt;
+        agent.schemaVersion = SCHEMA_VERSION;
     }
     return settings;
 }
@@ -336,7 +344,7 @@ function buildRequest(agent, instruction = '', options = {}) {
     ].join('\n');
 
     return {
-        systemPrompt: substituteParamsExtended(agent.systemPrompt || BASE_SYSTEM),
+        systemPrompt: substituteParamsExtended(getSettings().sharedSystemPrompt || BASE_SYSTEM),
         prompt,
         messageCount: Math.min(Number(agent.recentMessages) || 0, context.chat.length),
         approximateCharacters: prompt.length,
@@ -469,7 +477,6 @@ function refreshAgentEditor() {
 
     $('#story_workshop_agent_name').val(agent.name);
     $('#story_workshop_agent_category').val(agent.category);
-    $('#story_workshop_agent_system').val(agent.systemPrompt);
     $('#story_workshop_agent_task').val(agent.taskPrompt);
     $('#story_workshop_agent_recent').val(agent.recentMessages);
     $('#story_workshop_agent_tokens').val(agent.responseTokens);
@@ -479,6 +486,22 @@ function refreshAgentEditor() {
     $('#story_workshop_agent_toolbar_label').val(toolbarAction?.label || agent.name);
     $('#story_workshop_agent_toolbar_icon').val(toolbarAction?.icon || 'fa-solid fa-wand-magic-sparkles');
     $('#story_workshop_agent_toolbar_order').val(toolbarAction?.order ?? 100);
+}
+
+function refreshSharedSystemPrompt() {
+    $('#story_workshop_shared_system').val(getSettings().sharedSystemPrompt);
+}
+
+function saveSharedSystemPrompt() {
+    const prompt = String($('#story_workshop_shared_system').val() || '').trim();
+    if (!prompt) {
+        toastr.warning('The shared system prompt cannot be empty.');
+        refreshSharedSystemPrompt();
+        return;
+    }
+    getSettings().sharedSystemPrompt = prompt;
+    saveSettingsDebounced();
+    toastr.success('Shared system prompt saved for every Story Workshop agent.');
 }
 
 function refreshHistory() {
@@ -513,6 +536,7 @@ function refreshResult() {
 function refreshAllViews() {
     refreshPresetSelect();
     refreshStateEditor();
+    refreshSharedSystemPrompt();
     refreshAgentList();
     refreshAgentEditor();
     refreshHistory();
@@ -823,7 +847,6 @@ function saveAgentEditor() {
 
     agent.name = String($('#story_workshop_agent_name').val() || '').trim() || agent.name;
     agent.category = String($('#story_workshop_agent_category').val() || '').trim() || 'Custom';
-    agent.systemPrompt = String($('#story_workshop_agent_system').val() || '');
     agent.taskPrompt = String($('#story_workshop_agent_task').val() || '');
     agent.recentMessages = Math.max(0, Number($('#story_workshop_agent_recent').val()) || 0);
     agent.responseTokens = Math.max(32, Number($('#story_workshop_agent_tokens').val()) || 450);
@@ -861,7 +884,6 @@ function newAgent() {
         name: 'New Story Helper',
         category: 'Custom',
         enabled: true,
-        systemPrompt: BASE_SYSTEM,
         taskPrompt: 'Describe the helper task here. User focus: {{instruction}}',
         recentMessages: 8,
         responseTokens: 450,
@@ -906,6 +928,7 @@ function restoreBuiltIns() {
 function exportAgents() {
     const payload = JSON.stringify({
         schemaVersion: SCHEMA_VERSION,
+        sharedSystemPrompt: getSettings().sharedSystemPrompt,
         agents: getSettings().agents,
         toolbarActions: getSettings().toolbarActions,
     }, null, 2);
@@ -929,15 +952,20 @@ async function importAgents(event) {
         if (!Array.isArray(parsed?.agents) || !parsed.agents.length) {
             throw new Error('The file does not contain an agents array.');
         }
-        const valid = parsed.agents.filter(agent => agent?.id && agent?.name && agent?.systemPrompt && agent?.taskPrompt);
+        const valid = parsed.agents.filter(agent => agent?.id && agent?.name && agent?.taskPrompt);
         if (!valid.length) {
             throw new Error('No valid agents were found.');
         }
         const existing = new Map(getSettings().agents.map(agent => [agent.id, agent]));
         for (const agent of valid) {
-            existing.set(agent.id, { ...agent, builtIn: false, schemaVersion: SCHEMA_VERSION });
+            const taskAgent = { ...agent };
+            delete taskAgent.systemPrompt;
+            existing.set(agent.id, { ...taskAgent, builtIn: false, schemaVersion: SCHEMA_VERSION });
         }
         getSettings().agents = [...existing.values()];
+        if (typeof parsed.sharedSystemPrompt === 'string' && parsed.sharedSystemPrompt.trim()) {
+            getSettings().sharedSystemPrompt = parsed.sharedSystemPrompt;
+        }
         if (Array.isArray(parsed.toolbarActions)) {
             getSettings().toolbarActions = parsed.toolbarActions;
         }
@@ -1550,6 +1578,7 @@ function setupListeners() {
     $('#story_workshop_undo_rewrite').on('click', undoRewrite);
     $('#story_workshop_discard').on('click', discardResult);
     $('#story_workshop_save_state_editor').on('click', saveStateEditor);
+    $('#story_workshop_save_shared_system').on('click', saveSharedSystemPrompt);
     $('#story_workshop_agent_search').on('input', refreshAgentList);
     $('#story_workshop_agent_cards').on('click', '.story_workshop_agent_card', function () {
         selectedAgentId = String($(this).data('agent-id'));
@@ -1656,6 +1685,9 @@ function setupListeners() {
 
 export async function init() {
     getSettings();
+    // Persist the v1-to-v2 cleanup immediately, so old per-agent system prompts
+    // are removed from the user settings rather than merely ignored in memory.
+    saveSettingsDebounced();
     const html = await renderExtensionTemplateAsync(MODULE_NAME, 'settings');
     const nodes = $(html);
     const settings = nodes.filter('#story_workshop_settings');
