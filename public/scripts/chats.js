@@ -39,6 +39,8 @@ import {
     getBase64Async,
     getStringHash,
     humanFileSize,
+    createThumbnail,
+    getImageSizeFromDataURL,
     saveBase64AsFile,
     extractTextFromOffice,
     download,
@@ -74,6 +76,9 @@ import { MEDIA_DISPLAY, MEDIA_SOURCE, MEDIA_TYPE, SCROLL_BEHAVIOR, SWIPE_DIRECTI
  */
 
 const fileSizeLimit = 1024 * 1024 * 350; // 350 MB
+const CHAT_IMAGE_MAX_SIDE = 1600;
+const CHAT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024;
+const CHAT_IMAGE_WEBP_QUALITY = 0.82;
 const ATTACHMENT_SOURCE = {
     GLOBAL: 'global',
     CHARACTER: 'character',
@@ -95,6 +100,50 @@ const converters = {
     'application/vnd.oasis.opendocument.presentation': extractTextFromOffice,
     'application/vnd.oasis.opendocument.spreadsheet': extractTextFromOffice,
 };
+
+/**
+ * Downscale large still-image uploads before they become chat media. This keeps
+ * the saved message and every later multimodal request reasonably sized.
+ *
+ * @param {File} file Original image file
+ * @returns {Promise<{ base64Data: string, extension: string, compressed: boolean }>} Upload-ready image data
+ */
+async function prepareChatImageUpload(file) {
+    const originalDataUrl = await getBase64Async(file);
+    const original = {
+        base64Data: originalDataUrl.split(',')[1],
+        extension: getFileExtension(file),
+        compressed: false,
+    };
+
+    // Keep animations intact. Canvas conversion would flatten them to one frame.
+    if (file.type === 'image/gif') {
+        return original;
+    }
+
+    try {
+        const { width, height } = await getImageSizeFromDataURL(originalDataUrl);
+        if (Math.max(width, height) <= CHAT_IMAGE_MAX_SIDE && file.size <= CHAT_IMAGE_MAX_BYTES) {
+            return original;
+        }
+
+        const compressedDataUrl = await createThumbnail(
+            originalDataUrl,
+            CHAT_IMAGE_MAX_SIDE,
+            CHAT_IMAGE_MAX_SIDE,
+            'image/webp',
+            CHAT_IMAGE_WEBP_QUALITY,
+        );
+        return {
+            base64Data: compressedDataUrl.split(',')[1],
+            extension: 'webp',
+            compressed: true,
+        };
+    } catch (error) {
+        console.warn('Could not compress chat image; uploading original.', error);
+        return original;
+    }
+}
 
 /**
  * Finds a matching key in the converters object.
@@ -205,12 +254,13 @@ export async function populateFileAttachment(message, inputId = 'file_form_input
         for (const file of fileInput.files) {
             const slug = getStringHash(file.name);
             const fileNamePrefix = `${Date.now()}_${slug}`;
-            const fileBase64 = await getBase64Async(file);
-            let base64Data = fileBase64.split(',')[1];
-            const extension = getFileExtension(file);
 
             const mediaType = MEDIA_TYPE.getFromMime(file.type);
             if (mediaType) {
+                const imageUpload = mediaType === MEDIA_TYPE.IMAGE
+                    ? await prepareChatImageUpload(file)
+                    : { base64Data: (await getBase64Async(file)).split(',')[1], extension: getFileExtension(file), compressed: false };
+                const { base64Data, extension } = imageUpload;
                 const imageUrl = await saveBase64AsFile(base64Data, name2, fileNamePrefix, extension);
                 if (!Array.isArray(message.extra.media)) {
                     message.extra.media = [];
@@ -226,6 +276,8 @@ export async function populateFileAttachment(message, inputId = 'file_form_input
                 message.extra.media_index = message.extra.media.length - 1;
                 message.extra.inline_image = true;
             } else {
+                const fileBase64 = await getBase64Async(file);
+                let base64Data = fileBase64.split(',')[1];
                 const uniqueFileName = `${fileNamePrefix}.txt`;
 
                 if (isConvertible(file.type)) {

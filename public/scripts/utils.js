@@ -1887,9 +1887,10 @@ export async function convertImageFile(inputFile, type = 'image/png') {
  * @param {number|null} maxWidth The maximum width of the thumbnail.
  * @param {number|null} maxHeight The maximum height of the thumbnail.
  * @param {string} [type='image/jpeg'] The type of the thumbnail.
+ * @param {number} [quality] Encoder quality for lossy image formats, from 0 to 1.
  * @returns {Promise<string>} A promise that resolves to the thumbnail data URL.
  */
-export function createThumbnail(dataUrl, maxWidth = null, maxHeight = null, type = 'image/jpeg') {
+export function createThumbnail(dataUrl, maxWidth = null, maxHeight = null, type = 'image/jpeg', quality = undefined) {
     // Someone might pass in a base64 encoded string without the data URL prefix
     if (!dataUrl.includes('data:')) {
         dataUrl = `data:image/jpeg;base64,${dataUrl}`;
@@ -1908,12 +1909,16 @@ export function createThumbnail(dataUrl, maxWidth = null, maxHeight = null, type
             canvas.height = thumbnailHeight;
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, thumbnailWidth, thumbnailHeight);
+            // JPEG cannot retain alpha, but WebP and PNG can. Keep transparency
+            // when callers choose a format that supports it.
+            if (type === 'image/jpeg') {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, thumbnailWidth, thumbnailHeight);
+            }
             ctx.drawImage(img, 0, 0, thumbnailWidth, thumbnailHeight);
 
             // Convert the canvas to a data URL and resolve the promise
-            const thumbnailDataUrl = canvas.toDataURL(type);
+            const thumbnailDataUrl = canvas.toDataURL(type, quality);
             resolve(thumbnailDataUrl);
         };
 
