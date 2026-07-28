@@ -1,0 +1,14 @@
+{
+    "display_name": "Story Workshop",
+    "loading_order": 20,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "SillyTavern contributors",
+    "version": "0.1.0",
+    "homePage": "https://github.com/kamtar/SillyTavern",
+    "hooks": {
+        "activate": "init"
+    }
+}

@@ -1,0 +1,247 @@
+#story_workshop_settings .story_workshop_status {
+    padding: 0.15rem 0.45rem;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+.story_workshop_hint {
+    opacity: 0.75;
+    margin: 0.5rem 0;
+}
+
+#story_workshop_panel {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 40000;
+}
+
+#story_workshop_panel.open {
+    display: block;
+}
+
+.story_workshop_backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 55%);
+    backdrop-filter: blur(2px);
+}
+
+.story_workshop_shell {
+    position: absolute;
+    top: 2vh;
+    right: 1rem;
+    bottom: 2vh;
+    width: min(980px, calc(100vw - 2rem));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 12px;
+    background: var(--SmartThemeBlurTintColor);
+    color: var(--SmartThemeBodyColor);
+    box-shadow: 0 16px 50px rgb(0 0 0 / 45%);
+}
+
+.story_workshop_header,
+.story_workshop_card_title,
+.story_workshop_context_line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.story_workshop_card_title > div {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.story_workshop_card_title .menu_button {
+    white-space: nowrap;
+}
+
+.story_workshop_header {
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+
+.story_workshop_header h2 {
+    margin: 0 0 0.2rem;
+}
+
+.story_workshop_tabs {
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.6rem 1rem 0;
+}
+
+.story_workshop_tab {
+    padding: 0.55rem 0.9rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.story_workshop_tab.active {
+    border-color: var(--SmartThemeQuoteColor);
+    color: var(--SmartThemeQuoteColor);
+}
+
+.story_workshop_body {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    padding: 1rem;
+}
+
+.story_workshop_view {
+    display: none;
+}
+
+.story_workshop_view.active {
+    display: block;
+}
+
+.story_workshop_run_grid,
+.story_workshop_agent_layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.85fr) minmax(360px, 1.15fr);
+    gap: 1rem;
+}
+
+.story_workshop_card {
+    padding: 1rem;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 10px;
+    background: rgb(0 0 0 / 12%);
+}
+
+.story_workshop_card label {
+    display: block;
+    margin: 0.75rem 0 0.3rem;
+}
+
+.story_workshop_context_line {
+    margin: 0.75rem 0;
+    font-size: 0.85rem;
+}
+
+#story_workshop_result,
+#story_workshop_context_text {
+    min-height: 16rem;
+    max-height: 52vh;
+    overflow: auto;
+    padding: 0.8rem;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 6px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: rgb(0 0 0 / 18%);
+    font: inherit;
+}
+
+#story_workshop_result_badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 8%);
+    font-size: 0.75rem;
+}
+
+.story_workshop_result_actions {
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.story_workshop_large_editor {
+    width: 100%;
+    min-height: 48vh;
+    font-family: var(--monoFontFamily, monospace);
+}
+
+.story_workshop_agent_list {
+    max-height: 65vh;
+    overflow: auto;
+}
+
+.story_workshop_agent_editor {
+    min-width: 0;
+}
+
+.story_workshop_agent_card {
+    padding: 0.65rem;
+    margin: 0.5rem 0;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.story_workshop_agent_card:hover,
+.story_workshop_agent_card.active {
+    border-color: var(--SmartThemeQuoteColor);
+    background: rgb(255 255 255 / 7%);
+}
+
+.story_workshop_agent_card small {
+    display: block;
+    opacity: 0.7;
+}
+
+.story_workshop_inline_fields {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+}
+
+.story_workshop_history_item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+
+.story_workshop_history_item pre {
+    max-height: 12rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    font: inherit;
+}
+
+#story_workshop_context_preview {
+    display: none;
+    position: absolute;
+    inset: 0 0 0 38%;
+    z-index: 3;
+    padding: 1rem;
+    overflow: auto;
+    border-left: 1px solid var(--SmartThemeBorderColor);
+    background: var(--SmartThemeBlurTintColor);
+    box-shadow: -10px 0 30px rgb(0 0 0 / 25%);
+}
+
+#story_workshop_context_preview.open {
+    display: block;
+}
+
+@media (max-width: 700px) {
+    .story_workshop_shell {
+        inset: auto 0 0;
+        width: 100%;
+        height: 92vh;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .story_workshop_run_grid,
+    .story_workshop_agent_layout,
+    .story_workshop_inline_fields {
+        grid-template-columns: 1fr;
+    }
+
+    #story_workshop_context_preview {
+        inset: 0;
+    }
+}

@@ -1,0 +1,179 @@
+<div id="story_workshop_settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <div class="flex-container alignitemscenter margin0">
+                <b>Story Workshop</b>
+                <span class="story_workshop_status">Manual</span>
+            </div>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <p class="story_workshop_hint">
+                Scoped helper agents for direction, continuity, character intent, scene state, and prose.
+            </p>
+            <div class="flex-container">
+                <button id="story_workshop_open" class="menu_button menu_button_icon">
+                    <i class="fa-solid fa-clapperboard"></i>
+                    <span>Open Story Workshop</span>
+                </button>
+                <button id="story_workshop_quick_direct" class="menu_button menu_button_icon">
+                    <i class="fa-solid fa-compass"></i>
+                    <span>Direct next reply</span>
+                </button>
+            </div>
+            <label class="checkbox_label" for="story_workshop_inject_state">
+                <input id="story_workshop_inject_state" type="checkbox">
+                <span>Inject saved state into normal replies</span>
+            </label>
+            <small>
+                Private results stay outside chat. Saved state is sent to the active model only when this option is enabled.
+            </small>
+        </div>
+    </div>
+</div>
+
+<div id="story_workshop_panel" aria-hidden="true">
+    <div class="story_workshop_backdrop"></div>
+    <section class="story_workshop_shell" role="dialog" aria-modal="true" aria-label="Story Workshop">
+        <header class="story_workshop_header">
+            <div>
+                <h2><i class="fa-solid fa-clapperboard"></i> Story Workshop</h2>
+                <small>Private, scoped helpers using the currently selected SillyTavern connection.</small>
+            </div>
+            <button id="story_workshop_close" class="menu_button" title="Close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </header>
+
+        <nav class="story_workshop_tabs" aria-label="Story Workshop sections">
+            <button class="story_workshop_tab active" data-tab="run">Run</button>
+            <button class="story_workshop_tab" data-tab="state">Story state</button>
+            <button class="story_workshop_tab" data-tab="agents">Agents</button>
+            <button class="story_workshop_tab" data-tab="history">Runs</button>
+        </nav>
+
+        <main class="story_workshop_body">
+            <section class="story_workshop_view active" data-view="run">
+                <div class="story_workshop_run_grid">
+                    <div class="story_workshop_card">
+                        <label for="story_workshop_preset">Helper agent</label>
+                        <select id="story_workshop_preset" class="text_pole"></select>
+
+                        <label for="story_workshop_instruction">What should it focus on?</label>
+                        <textarea id="story_workshop_instruction" class="text_pole" rows="4" placeholder="Optional direction, character, scene detail, or style request"></textarea>
+
+                        <div class="story_workshop_context_line">
+                            <span id="story_workshop_context_summary">No chat selected</span>
+                            <button id="story_workshop_preview_context" class="menu_button">Preview exact context</button>
+                        </div>
+
+                        <div class="flex-container">
+                            <button id="story_workshop_run" class="menu_button menu_button_icon">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>Run helper</span>
+                            </button>
+                            <button id="story_workshop_cancel" class="menu_button menu_button_icon" disabled>
+                                <i class="fa-solid fa-stop"></i>
+                                <span>Cancel</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="story_workshop_card story_workshop_result_card">
+                        <div class="story_workshop_card_title">
+                            <b>Private result</b>
+                            <span id="story_workshop_result_badge">Not saved</span>
+                        </div>
+                        <pre id="story_workshop_result">Run a helper to create a private draft or story note.</pre>
+                        <div class="flex-container story_workshop_result_actions">
+                            <button id="story_workshop_use_next" class="menu_button" disabled>Use for next reply</button>
+                            <button id="story_workshop_save_state" class="menu_button" disabled>Save to state</button>
+                            <button id="story_workshop_copy_composer" class="menu_button" disabled>Copy to composer</button>
+                            <button id="story_workshop_discard" class="menu_button" disabled>Discard</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="story_workshop_view" data-view="state">
+                <div class="story_workshop_card">
+                    <div class="story_workshop_card_title">
+                        <b>Per-chat private state</b>
+                        <button id="story_workshop_save_state_editor" class="menu_button">Save edits</button>
+                    </div>
+                    <p class="story_workshop_hint">
+                        Keep the scene, character motives, open threads, and style contract here. This is not shown in chat.
+                    </p>
+                    <textarea id="story_workshop_state_editor" class="text_pole story_workshop_large_editor" rows="20"></textarea>
+                </div>
+            </section>
+
+            <section class="story_workshop_view" data-view="agents">
+                <div class="story_workshop_agent_layout">
+                    <aside class="story_workshop_agent_list">
+                        <input id="story_workshop_agent_search" class="text_pole" type="search" placeholder="Search agents">
+                        <div id="story_workshop_agent_cards"></div>
+                    </aside>
+                    <div class="story_workshop_card story_workshop_agent_editor">
+                        <div class="story_workshop_card_title">
+                            <b>Edit selected agent</b>
+                            <div>
+                                <button id="story_workshop_duplicate_agent" class="menu_button">Duplicate</button>
+                                <button id="story_workshop_restore_agents" class="menu_button">Restore built-ins</button>
+                            </div>
+                        </div>
+                        <label for="story_workshop_agent_name">Name</label>
+                        <input id="story_workshop_agent_name" class="text_pole" type="text">
+                        <label for="story_workshop_agent_category">Category</label>
+                        <input id="story_workshop_agent_category" class="text_pole" type="text">
+                        <label for="story_workshop_agent_system">System prompt</label>
+                        <textarea id="story_workshop_agent_system" class="text_pole" rows="8"></textarea>
+                        <label for="story_workshop_agent_task">Task prompt</label>
+                        <textarea id="story_workshop_agent_task" class="text_pole" rows="6"></textarea>
+                        <div class="story_workshop_inline_fields">
+                            <label>Recent messages
+                                <input id="story_workshop_agent_recent" class="text_pole" type="number" min="0" max="100">
+                            </label>
+                            <label>Maximum output tokens
+                                <input id="story_workshop_agent_tokens" class="text_pole" type="number" min="32" max="8192">
+                            </label>
+                            <label>Default destination
+                                <select id="story_workshop_agent_destination" class="text_pole">
+                                    <option value="preview">Private preview</option>
+                                    <option value="direction">One-shot direction</option>
+                                    <option value="state">Story state</option>
+                                    <option value="draft">Composer draft</option>
+                                </select>
+                            </label>
+                        </div>
+                        <button id="story_workshop_save_agent" class="menu_button menu_button_icon">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>Save agent</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="story_workshop_view" data-view="history">
+                <div class="story_workshop_card">
+                    <div class="story_workshop_card_title">
+                        <b>Recent private runs</b>
+                        <button id="story_workshop_clear_history" class="menu_button">Clear</button>
+                    </div>
+                    <div id="story_workshop_history"></div>
+                </div>
+            </section>
+        </main>
+
+        <aside id="story_workshop_context_preview" aria-hidden="true">
+            <div class="story_workshop_card_title">
+                <b>Exact helper request</b>
+                <button id="story_workshop_close_context" class="menu_button"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="story_workshop_hint">
+                The helper gets only this bounded context. Chat text is treated as story evidence, not as instructions.
+            </p>
+            <pre id="story_workshop_context_text"></pre>
+        </aside>
+    </section>
+</div>
