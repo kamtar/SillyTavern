@@ -1,9 +1,11 @@
 import {
+    addOneMessage,
     eventSource,
     event_types,
     extension_prompt_roles,
     extension_prompt_types,
     generateRaw,
+    messageFormatting,
     saveSettingsDebounced,
     setExtensionPrompt,
     substituteParamsExtended,
@@ -16,6 +18,7 @@ import {
     renderExtensionTemplateAsync,
     saveMetadataDebounced,
 } from '../../extensions.js';
+import { getMessageTimeStamp } from '../../RossAscends-mods.js';
 
 const MODULE_NAME = 'story-workshop';
 const SETTINGS_KEY = 'storyWorkshop';
@@ -59,6 +62,7 @@ function makeAgent(id, name, category, taskPrompt, options = {}) {
         recentMessages: options.recentMessages ?? 10,
         responseTokens: options.responseTokens ?? 450,
         destination: options.destination || 'preview',
+        chatDelivery: options.chatDelivery || 'manual',
         stateKey: options.stateKey || id,
         builtIn: true,
     };
@@ -190,6 +194,7 @@ function getSettings() {
     for (const agent of settings.agents) {
         delete agent.systemPrompt;
         agent.schemaVersion = SCHEMA_VERSION;
+        agent.chatDelivery ??= 'manual';
     }
     return settings;
 }
@@ -481,6 +486,7 @@ function refreshAgentEditor() {
     $('#story_workshop_agent_recent').val(agent.recentMessages);
     $('#story_workshop_agent_tokens').val(agent.responseTokens);
     $('#story_workshop_agent_destination').val(agent.destination);
+    $('#story_workshop_agent_chat_delivery').val(agent.chatDelivery || 'manual');
     const toolbarAction = getSettings().toolbarActions.find(action => action.agentId === agent.id);
     $('#story_workshop_agent_toolbar').prop('checked', Boolean(toolbarAction));
     $('#story_workshop_agent_toolbar_label').val(toolbarAction?.label || agent.name);
@@ -523,11 +529,19 @@ function refreshHistory() {
 
 function refreshResult() {
     const enabled = Boolean(currentResult?.output);
-    $('#story_workshop_result').text(currentResult?.output || 'Run a helper to create a private draft or story note.');
+    const resultElement = $('#story_workshop_result');
+    if (currentResult?.output) {
+        resultElement.html(messageFormatting(currentResult.output, currentResult.agent.name, false, false, -1, {}, false));
+    } else {
+        resultElement.text('Run a helper to create a private draft or story note.');
+    }
     $('#story_workshop_result_badge').text(currentResult ? `Suggested: ${currentResult.agent.destination}` : 'Not saved');
     $('#story_workshop_use_next, #story_workshop_save_state, #story_workshop_copy_composer, #story_workshop_discard').prop('disabled', !enabled);
     $('#story_workshop_apply_rewrite').prop('disabled', !currentResult?.rewriteTarget);
     $('#story_workshop_undo_rewrite').prop('disabled', !getChatState().undoRewrite);
+    $('#story_workshop_add_to_chat')
+        .toggle(currentResult?.agent.destination === 'chat' || Boolean(currentResult?.chatMessageId))
+        .prop('disabled', !enabled || Boolean(currentResult?.chatMessageId));
     $('#story_workshop_rewrite_compare').toggleClass('visible', Boolean(currentResult?.rewriteTarget));
     $('#story_workshop_rewrite_original').text(currentResult?.rewriteTarget?.originalText || '');
     $('#story_workshop_rewrite_proposed').text(currentResult?.output || '');
@@ -604,6 +618,8 @@ async function executeAgent(agent, instruction = '', options = {}) {
             saveResultToState();
         } else if (options.autoApply === 'character') {
             saveResultToCharacterProfile();
+        } else if (options.autoApply === 'chat') {
+            await addResultToChat();
         }
         showInlineResult(currentResult, options);
         if (!options.quiet) {
@@ -629,6 +645,7 @@ async function runSelectedAgent() {
     }
     await executeAgent(agent, String($('#story_workshop_instruction').val() || ''), {
         rewriteTarget: targetedMessageId === null ? null : createRewriteTarget(targetedMessageId),
+        autoApply: agent.destination === 'chat' && agent.chatDelivery === 'automatic' ? 'chat' : null,
     });
 }
 
@@ -705,6 +722,44 @@ function saveResultToCharacterProfile() {
     saveSettingsDebounced();
     refreshCharacterTools();
     $('#story_workshop_result_badge').text('Saved to private character dossier');
+}
+
+async function addResultToChat() {
+    if (!currentResult?.output) {
+        return;
+    }
+    if (currentResult.chatMessageId !== undefined) {
+        toastr.info('This result is already in the chat.');
+        return;
+    }
+
+    const context = getContext();
+    const agent = currentResult.agent;
+    const message = {
+        name: String(agent.name || 'Story Workshop').trim() || 'Story Workshop',
+        is_user: false,
+        is_name: true,
+        is_system: false,
+        send_date: getMessageTimeStamp(),
+        mes: currentResult.output,
+        extra: {
+            swipeable: false,
+            storyWorkshop: {
+                sourceAgentId: agent.id,
+                sourceAgentName: agent.name,
+                createdAt: new Date().toISOString(),
+            },
+        },
+    };
+    context.chat.push(message);
+    const messageId = context.chat.length - 1;
+    addOneMessage(message);
+    await context.saveChat();
+    await eventSource.emit(event_types.MESSAGE_UPDATED, messageId);
+    currentResult.chatMessageId = messageId;
+    $('#story_workshop_result_badge').text('Added to chat');
+    refreshResult();
+    toastr.success(`${message.name}'s result was added to the chat.`);
 }
 
 async function applyRewrite() {
@@ -851,6 +906,7 @@ function saveAgentEditor() {
     agent.recentMessages = Math.max(0, Number($('#story_workshop_agent_recent').val()) || 0);
     agent.responseTokens = Math.max(32, Number($('#story_workshop_agent_tokens').val()) || 450);
     agent.destination = String($('#story_workshop_agent_destination').val() || 'preview');
+    agent.chatDelivery = String($('#story_workshop_agent_chat_delivery').val() || 'manual');
     agent.builtIn = false;
     const toolbarActions = getSettings().toolbarActions;
     const existingToolbarIndex = toolbarActions.findIndex(action => action.agentId === agent.id);
@@ -888,6 +944,7 @@ function newAgent() {
         recentMessages: 8,
         responseTokens: 450,
         destination: 'preview',
+        chatDelivery: 'manual',
         stateKey: id,
         builtIn: false,
     };
@@ -1016,6 +1073,7 @@ function installChatIntegrations() {
                             <option value="state">Save to chat story state</option>
                             <option value="character">Save to character dossier</option>
                             <option value="draft">Copy to composer</option>
+                            <option value="chat">Add as agent message</option>
                         </select>
                     </label>
                 </div>
@@ -1105,6 +1163,9 @@ function getDefaultQuickDestination(agent, rewriteTarget = null) {
     if (agent.destination === 'draft') {
         return 'draft';
     }
+    if (agent.destination === 'chat') {
+        return 'chat';
+    }
     return 'preview';
 }
 
@@ -1151,6 +1212,7 @@ async function submitQuickConfig() {
     if (destination === 'default') {
         destination = getDefaultQuickDestination(oneUseAgent, rewriteTarget);
     }
+    oneUseAgent.destination = destination;
     closeQuickConfig();
     if (rewriteTarget) {
         targetedMessageId = rewriteTarget.messageId;
@@ -1161,7 +1223,7 @@ async function submitQuickConfig() {
     }
     const result = await executeAgent(oneUseAgent, instruction, {
         rewriteTarget,
-        autoApply: ['direction', 'state', 'character'].includes(destination) ? destination : null,
+        autoApply: ['direction', 'state', 'character'].includes(destination) || (destination === 'chat' && oneUseAgent.chatDelivery === 'automatic') ? destination : null,
     });
     if (result && destination === 'draft') {
         copyResultToComposer();
@@ -1217,7 +1279,7 @@ async function runQuickAction(agentId) {
     const instruction = String($('#send_textarea').val() || '').trim();
     const destination = getDefaultQuickDestination(agent);
     const result = await executeAgent(agent, instruction, {
-        autoApply: ['direction', 'state', 'character'].includes(destination) ? destination : null,
+        autoApply: ['direction', 'state', 'character'].includes(destination) || (destination === 'chat' && agent.chatDelivery === 'automatic') ? destination : null,
     });
     if (result && destination === 'draft') {
         copyResultToComposer();
@@ -1574,9 +1636,11 @@ function setupListeners() {
     $('#story_workshop_use_next').on('click', useResultForNextReply);
     $('#story_workshop_save_state').on('click', saveResultToState);
     $('#story_workshop_copy_composer').on('click', copyResultToComposer);
+    $('#story_workshop_add_to_chat').on('click', () => void addResultToChat());
     $('#story_workshop_apply_rewrite').on('click', applyRewrite);
     $('#story_workshop_undo_rewrite').on('click', undoRewrite);
     $('#story_workshop_discard').on('click', discardResult);
+    $('#story_workshop_close_result').on('click', discardResult);
     $('#story_workshop_save_state_editor').on('click', saveStateEditor);
     $('#story_workshop_save_shared_system').on('click', saveSharedSystemPrompt);
     $('#story_workshop_agent_search').on('input', refreshAgentList);

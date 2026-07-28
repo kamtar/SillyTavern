@@ -147,16 +147,25 @@
 
 #story_workshop_result,
 #story_workshop_context_text {
-    min-height: 16rem;
-    max-height: 52vh;
-    overflow: auto;
+    min-height: 4rem;
     padding: 0.8rem;
     border: 1px solid var(--SmartThemeBorderColor);
     border-radius: 6px;
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
     background: rgb(0 0 0 / 18%);
     font: inherit;
+}
+
+#story_workshop_result {
+    max-height: none;
+    overflow: visible;
+    line-height: 1.5;
+}
+
+#story_workshop_context_text {
+    max-height: 52vh;
+    overflow: auto;
+    white-space: pre-wrap;
 }
 
 #story_workshop_result_badge {

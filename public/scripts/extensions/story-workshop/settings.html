@@ -89,13 +89,17 @@
                     <div class="story_workshop_card story_workshop_result_card">
                         <div class="story_workshop_card_title">
                             <b>Private result</b>
-                            <span id="story_workshop_result_badge">Not saved</span>
+                            <div>
+                                <span id="story_workshop_result_badge">Not saved</span>
+                                <button id="story_workshop_close_result" class="menu_button" title="Close private result"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
                         </div>
-                        <pre id="story_workshop_result">Run a helper to create a private draft or story note.</pre>
+                        <div id="story_workshop_result" class="mes_text">Run a helper to create a private draft or story note.</div>
                         <div class="flex-container story_workshop_result_actions">
                             <button id="story_workshop_use_next" class="menu_button" disabled>Use for next reply</button>
                             <button id="story_workshop_save_state" class="menu_button" disabled>Save to state</button>
                             <button id="story_workshop_copy_composer" class="menu_button" disabled>Copy to composer</button>
+                            <button id="story_workshop_add_to_chat" class="menu_button" disabled>Add to chat</button>
                             <button id="story_workshop_apply_rewrite" class="menu_button" disabled>Apply rewrite</button>
                             <button id="story_workshop_undo_rewrite" class="menu_button" disabled>Undo rewrite</button>
                             <button id="story_workshop_discard" class="menu_button" disabled>Discard</button>
@@ -202,6 +206,13 @@
                                     <option value="direction">One-shot direction</option>
                                     <option value="state">Story state</option>
                                     <option value="draft">Composer draft</option>
+                                    <option value="chat">Agent message in chat</option>
+                                </select>
+                            </label>
+                            <label>Chat delivery
+                                <select id="story_workshop_agent_chat_delivery" class="text_pole">
+                                    <option value="manual">Manual — show Add to chat</option>
+                                    <option value="automatic">Automatic — add after run</option>
                                 </select>
                             </label>
                         </div>
