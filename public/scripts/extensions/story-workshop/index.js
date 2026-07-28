@@ -664,36 +664,20 @@ async function runSelectedAgent() {
     });
 }
 
-function showInlineResult(result, options = {}) {
-    const container = $('#story_workshop_inline_result');
-    if (!container.length || !result?.output) {
+function showInlineResult(result) {
+    if (!result?.output) {
         return;
     }
-    const prefix = options.autoApply === 'direction'
-        ? 'Direction armed'
-        : options.autoApply === 'state'
-            ? 'Private state updated'
-            : options.autoApply === 'character'
-                ? 'Private character dossier updated'
-                : `${result.agent.name} ready`;
-    container.find('.story_workshop_inline_title').text(result.agent.name);
-    container.find('.story_workshop_inline_status').text(prefix);
-    container.find('.story_workshop_inline_body').html(messageFormatting(result.output, result.agent.name, false, false, -1, {}, false));
-    container.find('.story_workshop_inline_add_chat')
-        .toggle(result.agent.chatDelivery !== 'off')
-        .prop('disabled', result.chatMessageId !== undefined);
-    container.find('.story_workshop_inline_actions, .story_workshop_inline_use, .story_workshop_inline_view, .story_workshop_inline_undo').show();
-    updateInlineButtons();
-    container.addClass('visible');
+    // Composer children are clipped by several native layouts. Toolbar results
+    // therefore open the full panel, which is an independent overlay with a
+    // reliable close button and all result actions.
+    refreshResult();
+    setPanelOpen(true);
+    selectTab('run');
 }
 
 function showInlineNotice(title, message) {
-    const container = $('#story_workshop_inline_result');
-    container.find('.story_workshop_inline_title').text(title);
-    container.find('.story_workshop_inline_status').text('');
-    container.find('.story_workshop_inline_body').text(message);
-    container.find('.story_workshop_inline_actions').hide();
-    container.addClass('visible');
+    toastr.info(message, title);
 }
 
 function useResultForNextReply() {
@@ -865,9 +849,6 @@ async function undoRewrite() {
 
 function showUndoInline() {
     showInlineNotice('Rewrite applied', 'You can undo it while the message remains unchanged.');
-    $('#story_workshop_inline_result .story_workshop_inline_actions').show();
-    $('#story_workshop_inline_result .story_workshop_inline_add_chat, .story_workshop_inline_use, .story_workshop_inline_view').hide();
-    $('#story_workshop_inline_result .story_workshop_inline_undo').show();
 }
 
 function copyResultToComposer() {
@@ -1137,6 +1118,7 @@ function installChatIntegrations() {
         $('#send_form').prepend(toolbar);
     }
     $('#story_workshop_confirm_quick').prop('checked', getSettings().confirmQuickActions);
+    $('#story_workshop_inline_result').removeClass('visible');
     renderToolbarActions();
     updateInlineButtons();
     injectMessageActions();
