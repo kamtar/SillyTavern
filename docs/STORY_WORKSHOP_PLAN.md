@@ -110,6 +110,9 @@ The next UX iteration should add a composer toolbar and message-menu actions aft
 ### Phase 1 — manual guarded MVP
 
 - [x] Bundled extension and native settings entry
+- [x] Persistent chat-composer toolbar for daily actions
+- [x] Native message-menu rewrite action
+- [x] Character-editor button and private cross-chat character dossiers
 - [x] 24 editable helper presets
 - [x] Bounded helper context using `generateRaw()`
 - [x] Exact request preview
@@ -118,15 +121,18 @@ The next UX iteration should add a composer toolbar and message-menu actions aft
 - [x] Expiring one-shot direction brief
 - [x] Composer draft action
 - [x] Bounded run history
+- [x] Preset JSON import/export
+- [x] Last-assistant-message rewrite comparison, revision guard, and undo
+- [x] Composer quick actions
 - [ ] Structured state forms and field-level locks
-- [ ] Preset JSON import/export
-- [ ] Last-assistant-message rewrite diff and undo
-- [ ] Slash commands and composer quick actions
+- [ ] Slash commands
 
 ### Phase 2 — Assist mode
 
-- Deterministic repetition and stagnation scoring
-- Suggestions after every configurable number of assistant turns
+- [x] Deterministic repetition and stagnation scoring
+- [x] Suggestions after every configurable number of assistant turns
+- [x] Guarded mode that prepares and arms a direction only after a loop signal
+- [x] Chat-change and single-flight guards for background helper work
 - Scene-state delta updates on scene changes
 - Cancellable serial job queue
 - Cooldowns and maximum calls per turn/session

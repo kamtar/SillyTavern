@@ -25,6 +25,12 @@
                 <input id="story_workshop_inject_state" type="checkbox">
                 <span>Inject saved state into normal replies</span>
             </label>
+            <label for="story_workshop_assist_mode">Everyday assistance</label>
+            <select id="story_workshop_assist_mode" class="text_pole">
+                <option value="off">Off — manual tools only</option>
+                <option value="suggest">Suggest — detect repetition locally</option>
+                <option value="guarded">Guarded — prepare direction when a loop is detected</option>
+            </select>
             <small>
                 Private results stay outside chat. Saved state is sent to the active model only when this option is enabled.
             </small>
@@ -89,7 +95,19 @@
                             <button id="story_workshop_use_next" class="menu_button" disabled>Use for next reply</button>
                             <button id="story_workshop_save_state" class="menu_button" disabled>Save to state</button>
                             <button id="story_workshop_copy_composer" class="menu_button" disabled>Copy to composer</button>
+                            <button id="story_workshop_apply_rewrite" class="menu_button" disabled>Apply rewrite</button>
+                            <button id="story_workshop_undo_rewrite" class="menu_button" disabled>Undo rewrite</button>
                             <button id="story_workshop_discard" class="menu_button" disabled>Discard</button>
+                        </div>
+                        <div id="story_workshop_rewrite_compare">
+                            <div>
+                                <b>Original</b>
+                                <pre id="story_workshop_rewrite_original"></pre>
+                            </div>
+                            <div>
+                                <b>Proposed</b>
+                                <pre id="story_workshop_rewrite_proposed"></pre>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -120,6 +138,9 @@
                             <div>
                                 <button id="story_workshop_duplicate_agent" class="menu_button">Duplicate</button>
                                 <button id="story_workshop_restore_agents" class="menu_button">Restore built-ins</button>
+                                <button id="story_workshop_export_agents" class="menu_button">Export</button>
+                                <button id="story_workshop_import_agents" class="menu_button">Import</button>
+                                <input id="story_workshop_import_file" type="file" accept=".json,application/json" hidden>
                             </div>
                         </div>
                         <label for="story_workshop_agent_name">Name</label>
