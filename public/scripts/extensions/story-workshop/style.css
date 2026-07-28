@@ -397,8 +397,6 @@
 
 #story_workshop_inline_result {
     display: none;
-    gap: 0.5rem;
-    align-items: center;
     margin: 0.35rem 0.45rem 0;
     padding: 0.55rem 0.7rem;
     border: 1px solid var(--SmartThemeQuoteColor);
@@ -407,15 +405,38 @@
 }
 
 #story_workshop_inline_result.visible {
-    display: flex;
+    display: block;
 }
 
-#story_workshop_inline_result .story_workshop_inline_text {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+#story_workshop_inline_result .story_workshop_inline_header,
+#story_workshop_inline_result .story_workshop_inline_header > div,
+#story_workshop_inline_result .story_workshop_inline_actions {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+#story_workshop_inline_result .story_workshop_inline_header {
+    justify-content: space-between;
+}
+
+#story_workshop_inline_result .story_workshop_inline_status {
+    opacity: 0.72;
+}
+
+#story_workshop_inline_result .story_workshop_inline_body {
+    max-height: min(44vh, 32rem);
+    margin: 0.55rem 0;
+    padding: 0.65rem;
+    overflow: auto;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 7px;
+    background: rgb(0 0 0 / 13%);
+    line-height: 1.5;
+}
+
+#story_workshop_inline_result .story_workshop_inline_actions {
+    flex-wrap: wrap;
 }
 
 .story_workshop_message_action {
