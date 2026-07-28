@@ -7,6 +7,7 @@ import {
     saveSettingsDebounced,
     setExtensionPrompt,
     substituteParamsExtended,
+    system_message_types,
     updateMessageBlock,
 } from '../../../script.js';
 import {
@@ -22,13 +23,24 @@ const METADATA_KEY = 'storyWorkshop';
 const INJECTION_KEY = 'story_workshop_control';
 const SCHEMA_VERSION = 1;
 const MAX_HISTORY = 20;
+const DEFAULT_TOOLBAR_ACTIONS = [
+    { agentId: 'arc.designer', label: 'Arc', icon: 'fa-solid fa-route', order: 5 },
+    { agentId: 'director.next-beat', label: 'Direct', icon: 'fa-solid fa-compass', order: 10 },
+    { agentId: 'director.twist', label: 'Twist', icon: 'fa-solid fa-shuffle', order: 20 },
+    { agentId: 'character.motivation', label: 'Motivation', icon: 'fa-solid fa-bullseye', order: 30 },
+    { agentId: 'scene.snapshot', label: 'Scene', icon: 'fa-solid fa-location-dot', order: 40 },
+    { agentId: 'writing.less-generic', label: 'Polish', icon: 'fa-solid fa-pen-ruler', order: 50 },
+];
 
 let selectedAgentId = '';
 let currentResult = null;
 let isRunning = false;
 let assistRun = null;
+let arcMonitorRun = null;
 let chatEpoch = 0;
 let targetedMessageId = null;
+let quickConfigAgentId = null;
+let quickConfigMessageId = null;
 
 const BASE_SYSTEM = `You are a private roleplay story-development helper.
 You do not roleplay as the user and you do not continue the visible chat unless the task explicitly asks for prose.
@@ -55,6 +67,16 @@ function makeAgent(id, name, category, taskPrompt, options = {}) {
 
 function getBuiltInAgents() {
     return [
+        makeAgent('arc.designer', 'Experience and Arc Designer', 'Story', `Design a private long-form roleplay experience from the user's desire and current evidence.
+Return valid JSON only with this shape:
+{"title":"...","premise":"...","chapters":[{"title":"...","goal":"...","checkpoint":"observable condition that proves this chapter is resolved","resolutionSignals":["..."],"activePrompt":"short direction for normal roleplay generation","revealText":"short spoiler-light transition note"}]}
+Create 4-8 chapters with concrete, flexible checkpoints. Do not force exact dialogue or invalidate player choices.
+User desire: {{instruction}}`, { destination: 'preview', responseTokens: 1800, recentMessages: 12, stateKey: 'storyArc' }),
+        makeAgent('arc.monitor', 'Checkpoint Monitor', 'Story', `Judge whether the CURRENT hidden story checkpoint was meaningfully reached and resolved in the recent evidence.
+Return valid JSON only:
+{"reached":false,"confidence":0.0,"resolution":"brief factual explanation"}
+Use reached=true only when the checkpoint's observable condition occurred, not merely because it was mentioned.
+User focus: {{instruction}}`, { destination: 'preview', responseTokens: 220, recentMessages: 8 }),
         makeAgent('director.next-beat', 'Story Director', 'Story', `Design a compact direction brief for the next roleplay reply.
 Require one material change in knowledge, goal, relationship, location, resources, danger, or commitment.
 Give: CURRENT BEAT, REQUIRED CHANGE, CHARACTER INITIATIVE, CONSEQUENCE, CONTINUITY, and AVOID.
@@ -146,8 +168,21 @@ function getSettings() {
     settings.injectState ??= false;
     settings.assistMode ??= 'suggest';
     settings.assistEvery ??= 4;
+    settings.confirmQuickActions ??= false;
     settings.characterProfiles ??= {};
+    settings.toolbarActions ??= clone(DEFAULT_TOOLBAR_ACTIONS);
+    if (!settings.arcToolbarMigrated) {
+        if (!settings.toolbarActions.some(action => action.agentId === 'arc.designer')) {
+            settings.toolbarActions.push(clone(DEFAULT_TOOLBAR_ACTIONS[0]));
+        }
+        settings.arcToolbarMigrated = true;
+    }
     settings.agents ??= clone(getBuiltInAgents());
+    for (const builtIn of getBuiltInAgents()) {
+        if (!settings.agents.some(agent => agent.id === builtIn.id)) {
+            settings.agents.push(clone(builtIn));
+        }
+    }
     return settings;
 }
 
@@ -161,6 +196,7 @@ function getChatState() {
             history: [],
             assist: {},
             undoRewrite: null,
+            arc: null,
         };
     }
 
@@ -267,8 +303,12 @@ function buildRequest(agent, instruction = '', options = {}) {
     const targetEvidence = target
         ? `\n\nTARGET MESSAGE TO REWRITE\n<target_message id="${target.messageId}">\n${target.originalText}\n</target_message>`
         : '';
-    const savedState = Object.keys(state.artifacts).length
-        ? JSON.stringify(state.artifacts, null, 2)
+    const helperState = {
+        artifacts: state.artifacts,
+        hiddenArc: state.arc,
+    };
+    const savedState = Object.keys(state.artifacts).length || state.arc
+        ? JSON.stringify(helperState, null, 2)
         : 'No saved Story Workshop state.';
     const characterProfile = getSettings().characterProfiles[getCharacterKey(context)];
     const privateCharacterProfile = characterProfile
@@ -310,6 +350,11 @@ function applyPromptInjection() {
 
     if (settings.injectState && Object.keys(state.artifacts).length) {
         sections.push(`[PRIVATE STORY STATE]\n${JSON.stringify(state.artifacts, null, 2)}`);
+    }
+
+    const activeChapter = state.arc?.chapters?.[state.arc.currentIndex];
+    if (state.arc?.active && activeChapter?.activePrompt) {
+        sections.push(`[CURRENT HIDDEN EXPERIENCE CHECKPOINT]\n${activeChapter.activePrompt}\nCheckpoint: ${activeChapter.checkpoint}\nDo not mention this plan or future chapters.`);
     }
 
     if (state.oneShotBrief?.text) {
@@ -429,6 +474,11 @@ function refreshAgentEditor() {
     $('#story_workshop_agent_recent').val(agent.recentMessages);
     $('#story_workshop_agent_tokens').val(agent.responseTokens);
     $('#story_workshop_agent_destination').val(agent.destination);
+    const toolbarAction = getSettings().toolbarActions.find(action => action.agentId === agent.id);
+    $('#story_workshop_agent_toolbar').prop('checked', Boolean(toolbarAction));
+    $('#story_workshop_agent_toolbar_label').val(toolbarAction?.label || agent.name);
+    $('#story_workshop_agent_toolbar_icon').val(toolbarAction?.icon || 'fa-solid fa-wand-magic-sparkles');
+    $('#story_workshop_agent_toolbar_order').val(toolbarAction?.order ?? 100);
 }
 
 function refreshHistory() {
@@ -467,6 +517,7 @@ function refreshAllViews() {
     refreshAgentEditor();
     refreshHistory();
     refreshResult();
+    refreshArcView();
     updateStatus();
 }
 
@@ -778,10 +829,52 @@ function saveAgentEditor() {
     agent.responseTokens = Math.max(32, Number($('#story_workshop_agent_tokens').val()) || 450);
     agent.destination = String($('#story_workshop_agent_destination').val() || 'preview');
     agent.builtIn = false;
+    const toolbarActions = getSettings().toolbarActions;
+    const existingToolbarIndex = toolbarActions.findIndex(action => action.agentId === agent.id);
+    if ($('#story_workshop_agent_toolbar').prop('checked')) {
+        const toolbarAction = {
+            agentId: agent.id,
+            label: String($('#story_workshop_agent_toolbar_label').val() || '').trim() || agent.name,
+            icon: normalizeIconClasses($('#story_workshop_agent_toolbar_icon').val()),
+            order: Math.max(0, Number($('#story_workshop_agent_toolbar_order').val()) || 100),
+        };
+        if (existingToolbarIndex >= 0) {
+            toolbarActions[existingToolbarIndex] = toolbarAction;
+        } else {
+            toolbarActions.push(toolbarAction);
+        }
+    } else if (existingToolbarIndex >= 0) {
+        toolbarActions.splice(existingToolbarIndex, 1);
+    }
     saveSettingsDebounced();
     refreshPresetSelect();
     refreshAgentList();
+    renderToolbarActions();
     toastr.success('Agent preset saved.');
+}
+
+function newAgent() {
+    const id = `custom.${Date.now()}`;
+    const agent = {
+        schemaVersion: SCHEMA_VERSION,
+        id,
+        name: 'New Story Helper',
+        category: 'Custom',
+        enabled: true,
+        systemPrompt: BASE_SYSTEM,
+        taskPrompt: 'Describe the helper task here. User focus: {{instruction}}',
+        recentMessages: 8,
+        responseTokens: 450,
+        destination: 'preview',
+        stateKey: id,
+        builtIn: false,
+    };
+    getSettings().agents.push(agent);
+    selectedAgentId = id;
+    saveSettingsDebounced();
+    refreshAllViews();
+    selectTab('agents');
+    $('#story_workshop_agent_name').trigger('focus');
 }
 
 function duplicateSelectedAgent() {
@@ -814,6 +907,7 @@ function exportAgents() {
     const payload = JSON.stringify({
         schemaVersion: SCHEMA_VERSION,
         agents: getSettings().agents,
+        toolbarActions: getSettings().toolbarActions,
     }, null, 2);
     const blob = new Blob([payload], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -844,8 +938,12 @@ async function importAgents(event) {
             existing.set(agent.id, { ...agent, builtIn: false, schemaVersion: SCHEMA_VERSION });
         }
         getSettings().agents = [...existing.values()];
+        if (Array.isArray(parsed.toolbarActions)) {
+            getSettings().toolbarActions = parsed.toolbarActions;
+        }
         saveSettingsDebounced();
         refreshAllViews();
+        renderToolbarActions();
         toastr.success(`Imported ${valid.length} Story Workshop agents.`);
     } catch (error) {
         toastr.error(`Agent import failed: ${error.message}`);
@@ -860,13 +958,44 @@ function installChatIntegrations() {
     if (!$('#story_workshop_chatbar').length) {
         const toolbar = $(`
             <div id="story_workshop_chatbar">
-                <button class="menu_button story_workshop_quick_action" data-agent-id="director.next-beat" title="Prepare and arm a direction for the next reply"><i class="fa-solid fa-compass"></i> <span>Direct</span></button>
-                <button class="menu_button story_workshop_quick_action" data-agent-id="director.twist" title="Pitch a coherent unexpected turn"><i class="fa-solid fa-shuffle"></i> <span>Twist</span></button>
-                <button class="menu_button story_workshop_quick_action" data-agent-id="character.motivation" title="Refresh private character motivation"><i class="fa-solid fa-bullseye"></i> <span>Motivation</span></button>
-                <button class="menu_button story_workshop_quick_action" data-agent-id="scene.snapshot" title="Refresh private scene state"><i class="fa-solid fa-location-dot"></i> <span>Scene</span></button>
-                <button class="menu_button story_workshop_quick_action" data-agent-id="writing.less-generic" title="Polish the latest assistant reply with review"><i class="fa-solid fa-pen-ruler"></i> <span>Polish</span></button>
+                <div class="story_workshop_toolbar_actions"></div>
                 <span class="story_workshop_chat_status" title="Open Story Workshop">Manual</span>
+                <label class="menu_button story_workshop_quick_settings_toggle" title="Show one-use settings before running toolbar actions">
+                    <input id="story_workshop_confirm_quick" type="checkbox" hidden>
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Settings</span>
+                </label>
                 <button class="menu_button story_workshop_open_compact" title="Open Story Workshop"><i class="fa-solid fa-clapperboard"></i></button>
+            </div>
+            <div id="story_workshop_quick_config">
+                <div class="story_workshop_quick_config_header">
+                    <b id="story_workshop_quick_config_title">Run helper</b>
+                    <button class="menu_button story_workshop_quick_config_close" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <textarea id="story_workshop_quick_instruction" class="text_pole" rows="3" placeholder="Optional focus for this run"></textarea>
+                <div class="story_workshop_quick_config_fields">
+                    <label>Recent messages
+                        <input id="story_workshop_quick_recent" class="text_pole" type="number" min="0" max="100">
+                    </label>
+                    <label>Output tokens
+                        <input id="story_workshop_quick_tokens" class="text_pole" type="number" min="32" max="8192">
+                    </label>
+                    <label id="story_workshop_quick_destination_label">After generation
+                        <select id="story_workshop_quick_destination" class="text_pole">
+                            <option value="default">Use agent default</option>
+                            <option value="preview">Private preview</option>
+                            <option value="direction">Use for next reply</option>
+                            <option value="state">Save to chat story state</option>
+                            <option value="character">Save to character dossier</option>
+                            <option value="draft">Copy to composer</option>
+                        </select>
+                    </label>
+                </div>
+                <small>These values apply once and do not change the saved agent.</small>
+                <div class="story_workshop_quick_config_actions">
+                    <button class="menu_button story_workshop_quick_full_editor">Full editor</button>
+                    <button class="menu_button story_workshop_quick_run"><i class="fa-solid fa-play"></i> Run now</button>
+                </div>
             </div>
             <div id="story_workshop_inline_result">
                 <i class="fa-solid fa-lightbulb"></i>
@@ -879,8 +1008,33 @@ function installChatIntegrations() {
         `);
         $('#send_form').prepend(toolbar);
     }
+    $('#story_workshop_confirm_quick').prop('checked', getSettings().confirmQuickActions);
+    renderToolbarActions();
     updateInlineButtons();
     injectMessageActions();
+}
+
+function normalizeIconClasses(value) {
+    const classes = String(value || '').split(/\s+/).filter(token => /^fa[-\w]+$/.test(token));
+    return classes.length ? classes.join(' ') : 'fa-solid fa-wand-magic-sparkles';
+}
+
+function renderToolbarActions() {
+    const container = $('#story_workshop_chatbar .story_workshop_toolbar_actions').empty();
+    const actions = [...getSettings().toolbarActions].sort((left, right) => Number(left.order) - Number(right.order));
+    for (const action of actions) {
+        const agent = getAgentById(action.agentId);
+        if (!agent?.enabled) {
+            continue;
+        }
+        const button = $('<button>')
+            .addClass('menu_button story_workshop_quick_action')
+            .attr('data-agent-id', agent.id)
+            .attr('title', agent.name);
+        button.append($('<i>').addClass(normalizeIconClasses(action.icon)));
+        button.append(' ', $('<span>').text(action.label || agent.name));
+        container.append(button);
+    }
 }
 
 function updateInlineButtons() {
@@ -910,11 +1064,91 @@ function findLatestAssistantMessageId() {
     return null;
 }
 
-async function runRewriteForMessage(messageId, agentId = 'writing.less-generic') {
+function getDefaultQuickDestination(agent, rewriteTarget = null) {
+    if (rewriteTarget) {
+        return 'preview';
+    }
+    if (agent.destination === 'direction') {
+        return 'direction';
+    }
+    if (agent.destination === 'state') {
+        return agent.category === 'Character' ? 'character' : 'state';
+    }
+    if (agent.destination === 'draft') {
+        return 'draft';
+    }
+    return 'preview';
+}
+
+function openQuickConfig(agentId, messageId = null) {
+    const agent = getAgentById(agentId);
+    if (!agent) {
+        return;
+    }
+    quickConfigAgentId = agentId;
+    quickConfigMessageId = messageId;
+    const rewriteTarget = messageId === null ? null : createRewriteTarget(messageId);
+    $('#story_workshop_quick_config_title').text(`Run ${agent.name}`);
+    $('#story_workshop_quick_instruction').val(
+        rewriteTarget
+            ? 'Make this message more specific, consequential, and less repetitive while preserving its facts.'
+            : String($('#send_textarea').val() || '').trim(),
+    );
+    $('#story_workshop_quick_recent').val(agent.recentMessages);
+    $('#story_workshop_quick_tokens').val(agent.responseTokens);
+    $('#story_workshop_quick_destination').val('default');
+    $('#story_workshop_quick_config').addClass('visible');
+}
+
+function closeQuickConfig() {
+    quickConfigAgentId = null;
+    quickConfigMessageId = null;
+    $('#story_workshop_quick_config').removeClass('visible');
+}
+
+async function submitQuickConfig() {
+    const agent = getAgentById(quickConfigAgentId);
+    if (!agent) {
+        closeQuickConfig();
+        return;
+    }
+    const oneUseAgent = {
+        ...agent,
+        recentMessages: Math.max(0, Number($('#story_workshop_quick_recent').val()) || 0),
+        responseTokens: Math.max(32, Number($('#story_workshop_quick_tokens').val()) || agent.responseTokens),
+    };
+    const instruction = String($('#story_workshop_quick_instruction').val() || '');
+    const rewriteTarget = quickConfigMessageId === null ? null : createRewriteTarget(quickConfigMessageId);
+    let destination = String($('#story_workshop_quick_destination').val() || 'default');
+    if (destination === 'default') {
+        destination = getDefaultQuickDestination(oneUseAgent, rewriteTarget);
+    }
+    closeQuickConfig();
+    if (rewriteTarget) {
+        targetedMessageId = rewriteTarget.messageId;
+        selectedAgentId = agent.id;
+        setPanelOpen(true);
+        selectTab('run');
+        refreshPresetSelect();
+    }
+    const result = await executeAgent(oneUseAgent, instruction, {
+        rewriteTarget,
+        autoApply: ['direction', 'state', 'character'].includes(destination) ? destination : null,
+    });
+    if (result && destination === 'draft') {
+        copyResultToComposer();
+    }
+}
+
+async function runRewriteForMessage(messageId, agentId = 'writing.less-generic', skipConfirmation = false) {
     const target = createRewriteTarget(messageId);
     const agent = getAgentById(agentId);
     if (!target || !agent) {
         toastr.warning('No suitable message is available to rewrite.');
+        return;
+    }
+    if (getSettings().confirmQuickActions && !skipConfirmation) {
+        openQuickConfig(agentId, messageId);
         return;
     }
     targetedMessageId = messageId;
@@ -932,20 +1166,34 @@ async function runQuickAction(agentId) {
     if (!agent) {
         return;
     }
+    if (agentId === 'arc.designer') {
+        setPanelOpen(true);
+        selectTab('arc');
+        refreshArcView();
+        return;
+    }
+    if (getSettings().confirmQuickActions) {
+        const messageId = agentId === 'writing.less-generic' ? findLatestAssistantMessageId() : null;
+        if (agentId === 'writing.less-generic' && messageId === null) {
+            toastr.warning('No assistant reply is available to polish.');
+            return;
+        }
+        openQuickConfig(agentId, messageId);
+        return;
+    }
     if (agentId === 'writing.less-generic') {
-        await runRewriteForMessage(findLatestAssistantMessageId(), agentId);
+        await runRewriteForMessage(findLatestAssistantMessageId(), agentId, true);
         return;
     }
     targetedMessageId = null;
     const instruction = String($('#send_textarea').val() || '').trim();
-    const autoApply = agentId === 'director.next-beat'
-        ? 'direction'
-        : agentId === 'scene.snapshot'
-            ? 'state'
-            : agentId === 'character.motivation'
-                ? 'character'
-                : null;
-    await executeAgent(agent, instruction, { autoApply });
+    const destination = getDefaultQuickDestination(agent);
+    const result = await executeAgent(agent, instruction, {
+        autoApply: ['direction', 'state', 'character'].includes(destination) ? destination : null,
+    });
+    if (result && destination === 'draft') {
+        copyResultToComposer();
+    }
 }
 
 function installCharacterIntegration() {
@@ -1098,6 +1346,147 @@ async function maybeScheduleAssist(messageId, type) {
     assistRun = null;
 }
 
+function parseJsonLoose(text) {
+    const cleaned = String(text || '').replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start < 0 || end <= start) {
+        throw new Error('The helper did not return a JSON object.');
+    }
+    return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+function refreshArcView() {
+    const arc = getChatState().arc;
+    $('#story_workshop_arc_desire').val(arc?.desire || '');
+    $('#story_workshop_arc_reveal').prop('checked', Boolean(arc?.reveal));
+    $('#story_workshop_arc_log_chat').prop('checked', Boolean(arc?.logToChat));
+    $('#story_workshop_arc_pause').text(arc?.paused ? 'Resume monitoring' : 'Pause monitoring');
+    if (!arc?.chapters?.length) {
+        $('#story_workshop_arc_status').text('No active arc');
+        $('#story_workshop_arc_current').text('No active checkpoint.');
+        $('#story_workshop_arc_outline').text('Hidden until an arc is designed.');
+        return;
+    }
+    const chapter = arc.chapters[arc.currentIndex];
+    $('#story_workshop_arc_status').text(arc.active ? `Chapter ${arc.currentIndex + 1} of ${arc.chapters.length}` : 'Arc complete');
+    $('#story_workshop_arc_current').text(chapter
+        ? `${chapter.title}\n\nGoal: ${chapter.goal}\n\nCheckpoint: ${chapter.checkpoint}\n\nActive prompt: ${chapter.activePrompt}`
+        : 'All checkpoints completed.');
+    const outline = arc.reveal
+        ? arc.chapters.map((item, index) => `${index + 1}. ${item.title}\nGoal: ${item.goal}\nCheckpoint: ${item.checkpoint}`).join('\n\n')
+        : arc.chapters.map((item, index) => index <= arc.currentIndex
+            ? `${index + 1}. ${item.title}${index === arc.currentIndex ? ' (current)' : ' (completed)'}`
+            : `${index + 1}. [Hidden future chapter]`).join('\n');
+    $('#story_workshop_arc_outline').text(outline);
+}
+
+async function designArc() {
+    const desire = String($('#story_workshop_arc_desire').val() || '').trim();
+    if (!desire) {
+        toastr.warning('Describe the experience you want first.');
+        return;
+    }
+    const designer = getAgentById('arc.designer');
+    const result = designer ? await executeAgent(designer, desire) : null;
+    if (!result) {
+        return;
+    }
+    try {
+        const plan = parseJsonLoose(result.output);
+        if (!Array.isArray(plan.chapters) || !plan.chapters.length) {
+            throw new Error('The plan has no chapters.');
+        }
+        getChatState().arc = {
+            title: String(plan.title || 'Untitled experience'),
+            premise: String(plan.premise || ''),
+            chapters: plan.chapters,
+            currentIndex: 0,
+            active: true,
+            paused: false,
+            reveal: false,
+            logToChat: false,
+            desire,
+            monitorTurns: 0,
+            log: [],
+        };
+        saveMetadataDebounced();
+        applyPromptInjection();
+        refreshArcView();
+        updateStatus();
+        toastr.success('Hidden experience plan created. Only the current checkpoint is injected.');
+    } catch (error) {
+        toastr.error(`Could not read the arc plan: ${error.message}. You can edit the Arc Designer prompt for your model.`);
+    }
+}
+
+async function advanceArc(resolution = 'Advanced manually.') {
+    const state = getChatState();
+    const arc = state.arc;
+    const chapter = arc?.chapters?.[arc.currentIndex];
+    if (!arc || !chapter) {
+        return;
+    }
+    arc.log.push({
+        chapter: chapter.title,
+        resolution,
+        completedAt: new Date().toISOString(),
+    });
+    arc.currentIndex++;
+    if (arc.currentIndex >= arc.chapters.length) {
+        arc.active = false;
+    }
+    saveMetadataDebounced();
+    applyPromptInjection();
+    refreshArcView();
+    const next = arc.chapters[arc.currentIndex];
+    const notice = next
+        ? `Chapter completed: ${chapter.revealText || chapter.title}. Next chapter has begun.`
+        : `Experience arc completed: ${arc.title}.`;
+    toastr.success(notice);
+    if (arc.logToChat) {
+        const context = getContext();
+        context.sendSystemMessage(system_message_types.GENERIC, `Story Workshop — ${notice}`, { storyWorkshop: true });
+        await context.saveChat();
+        injectMessageActions();
+    }
+}
+
+async function maybeMonitorArc(messageId, type) {
+    const arc = getChatState().arc;
+    const message = getContext().chat[messageId];
+    if (!arc?.active || arc.paused || arcMonitorRun || isRunning || !message || message.is_user || message.is_system) {
+        return;
+    }
+    if (['quiet', 'impersonate', 'first_message'].includes(type)) {
+        return;
+    }
+    arc.monitorTurns = (Number(arc.monitorTurns) || 0) + 1;
+    if (arc.monitorTurns % 2 !== 0) {
+        saveMetadataDebounced();
+        return;
+    }
+    const chapter = arc.chapters[arc.currentIndex];
+    const monitor = getAgentById('arc.monitor');
+    if (!chapter || !monitor) {
+        return;
+    }
+    arcMonitorRun = executeAgent(monitor, `Current checkpoint: ${chapter.checkpoint}\nResolution signals: ${JSON.stringify(chapter.resolutionSignals || [])}`, { quiet: true });
+    const result = await arcMonitorRun;
+    arcMonitorRun = null;
+    if (!result) {
+        return;
+    }
+    try {
+        const verdict = parseJsonLoose(result.output);
+        if (verdict.reached === true && Number(verdict.confidence || 0) >= 0.65) {
+            await advanceArc(String(verdict.resolution || 'Checkpoint reached.'));
+        }
+    } catch (error) {
+        console.warn('Story Workshop checkpoint monitor returned invalid JSON', error);
+    }
+}
+
 function clearHistory() {
     getChatState().history = [];
     saveMetadataDebounced();
@@ -1117,6 +1506,7 @@ async function onCharacterMessageRendered(messageId, type) {
     }
     injectMessageActions();
     await maybeScheduleAssist(Number(messageId), type);
+    await maybeMonitorArc(Number(messageId), type);
 }
 
 function setupListeners() {
@@ -1168,14 +1558,60 @@ function setupListeners() {
         refreshAgentEditor();
     });
     $('#story_workshop_save_agent').on('click', saveAgentEditor);
+    $('#story_workshop_new_agent').on('click', newAgent);
     $('#story_workshop_duplicate_agent').on('click', duplicateSelectedAgent);
     $('#story_workshop_restore_agents').on('click', restoreBuiltIns);
     $('#story_workshop_export_agents').on('click', exportAgents);
     $('#story_workshop_import_agents').on('click', () => $('#story_workshop_import_file').trigger('click'));
     $('#story_workshop_import_file').on('change', importAgents);
     $('#story_workshop_clear_history').on('click', clearHistory);
+    $('#story_workshop_design_arc').on('click', () => void designArc());
+    $('#story_workshop_arc_pause').on('click', () => {
+        const arc = getChatState().arc;
+        if (arc) {
+            arc.paused = !arc.paused;
+            saveMetadataDebounced();
+            refreshArcView();
+        }
+    });
+    $('#story_workshop_arc_advance').on('click', () => void advanceArc());
+    $('#story_workshop_arc_reveal').on('change', function () {
+        const arc = getChatState().arc;
+        if (arc) {
+            arc.reveal = Boolean($(this).prop('checked'));
+            saveMetadataDebounced();
+            refreshArcView();
+        }
+    });
+    $('#story_workshop_arc_log_chat').on('change', function () {
+        const arc = getChatState().arc;
+        if (arc) {
+            arc.logToChat = Boolean($(this).prop('checked'));
+            saveMetadataDebounced();
+        }
+    });
     $(document).on('click.storyWorkshop', '.story_workshop_quick_action', function () {
         void runQuickAction(String($(this).data('agent-id')));
+    });
+    $(document).on('change.storyWorkshop', '#story_workshop_confirm_quick', function () {
+        getSettings().confirmQuickActions = Boolean($(this).prop('checked'));
+        saveSettingsDebounced();
+        if (!getSettings().confirmQuickActions) {
+            closeQuickConfig();
+        }
+    });
+    $(document).on('click.storyWorkshop', '.story_workshop_quick_config_close', closeQuickConfig);
+    $(document).on('click.storyWorkshop', '.story_workshop_quick_run', () => void submitQuickConfig());
+    $(document).on('click.storyWorkshop', '.story_workshop_quick_full_editor', () => {
+        const agent = getAgentById(quickConfigAgentId);
+        if (agent) {
+            selectedAgentId = agent.id;
+            targetedMessageId = quickConfigMessageId;
+            closeQuickConfig();
+            setPanelOpen(true);
+            selectTab('run');
+            refreshPresetSelect();
+        }
     });
     $(document).on('click.storyWorkshop', '.story_workshop_open_compact, .story_workshop_chat_status', () => setPanelOpen(true));
     $(document).on('click.storyWorkshop', '.story_workshop_message_action', function (event) {

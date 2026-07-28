@@ -111,6 +111,8 @@ The next UX iteration should add a composer toolbar and message-menu actions aft
 
 - [x] Bundled extension and native settings entry
 - [x] Persistent chat-composer toolbar for daily actions
+- [x] User-configurable toolbar populated from built-in or custom agents
+- [x] Optional one-use settings card before each toolbar run
 - [x] Native message-menu rewrite action
 - [x] Character-editor button and private cross-chat character dossiers
 - [x] 24 editable helper presets
@@ -122,6 +124,7 @@ The next UX iteration should add a composer toolbar and message-menu actions aft
 - [x] Composer draft action
 - [x] Bounded run history
 - [x] Preset JSON import/export
+- [x] Blank custom-agent creation plus editable toolbar label, icon, and order
 - [x] Last-assistant-message rewrite comparison, revision guard, and undo
 - [x] Composer quick actions
 - [ ] Structured state forms and field-level locks
@@ -133,6 +136,9 @@ The next UX iteration should add a composer toolbar and message-menu actions aft
 - [x] Suggestions after every configurable number of assistant turns
 - [x] Guarded mode that prepares and arms a direction only after a loop signal
 - [x] Chat-change and single-flight guards for background helper work
+- [x] Hidden multi-chapter experience plans and checkpoint prompts
+- [x] Low-token checkpoint monitoring with automatic chapter transitions
+- [x] Hidden-by-default future outline with optional reveal and optional chat transition notes
 - Scene-state delta updates on scene changes
 - Cancellable serial job queue
 - Cooldowns and maximum calls per turn/session

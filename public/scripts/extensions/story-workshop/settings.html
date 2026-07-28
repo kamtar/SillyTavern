@@ -53,6 +53,7 @@
 
         <nav class="story_workshop_tabs" aria-label="Story Workshop sections">
             <button class="story_workshop_tab active" data-tab="run">Run</button>
+            <button class="story_workshop_tab" data-tab="arc">Story arc</button>
             <button class="story_workshop_tab" data-tab="state">Story state</button>
             <button class="story_workshop_tab" data-tab="agents">Agents</button>
             <button class="story_workshop_tab" data-tab="history">Runs</button>
@@ -113,6 +114,34 @@
                 </div>
             </section>
 
+            <section class="story_workshop_view" data-view="arc">
+                <div class="story_workshop_card">
+                    <div class="story_workshop_card_title">
+                        <b>Hidden experience plan</b>
+                        <span id="story_workshop_arc_status">No active arc</span>
+                    </div>
+                    <label for="story_workshop_arc_desire">What experience or story do you want?</label>
+                    <textarea id="story_workshop_arc_desire" class="text_pole" rows="4" placeholder="A slow-burn mystery with escalating trust, three major revelations, and a bittersweet resolution…"></textarea>
+                    <div class="flex-container">
+                        <button id="story_workshop_design_arc" class="menu_button">Design hidden arc</button>
+                        <button id="story_workshop_arc_pause" class="menu_button">Pause monitoring</button>
+                        <button id="story_workshop_arc_advance" class="menu_button">Advance manually</button>
+                    </div>
+                    <label class="checkbox_label" for="story_workshop_arc_reveal">
+                        <input id="story_workshop_arc_reveal" type="checkbox">
+                        <span>Reveal future chapters and checkpoints in this UI</span>
+                    </label>
+                    <label class="checkbox_label" for="story_workshop_arc_log_chat">
+                        <input id="story_workshop_arc_log_chat" type="checkbox">
+                        <span>Add short chapter-transition notes to the visible chat</span>
+                    </label>
+                    <h4>Current checkpoint</h4>
+                    <pre id="story_workshop_arc_current">No active checkpoint.</pre>
+                    <h4>Experience outline</h4>
+                    <pre id="story_workshop_arc_outline">Hidden until an arc is designed.</pre>
+                </div>
+            </section>
+
             <section class="story_workshop_view" data-view="state">
                 <div class="story_workshop_card">
                     <div class="story_workshop_card_title">
@@ -136,6 +165,7 @@
                         <div class="story_workshop_card_title">
                             <b>Edit selected agent</b>
                             <div>
+                                <button id="story_workshop_new_agent" class="menu_button">New agent</button>
                                 <button id="story_workshop_duplicate_agent" class="menu_button">Duplicate</button>
                                 <button id="story_workshop_restore_agents" class="menu_button">Restore built-ins</button>
                                 <button id="story_workshop_export_agents" class="menu_button">Export</button>
@@ -166,6 +196,23 @@
                                     <option value="draft">Composer draft</option>
                                 </select>
                             </label>
+                        </div>
+                        <div class="story_workshop_toolbar_editor">
+                            <label class="checkbox_label" for="story_workshop_agent_toolbar">
+                                <input id="story_workshop_agent_toolbar" type="checkbox">
+                                <span>Show this agent in the chat toolbar</span>
+                            </label>
+                            <div class="story_workshop_inline_fields">
+                                <label>Toolbar text
+                                    <input id="story_workshop_agent_toolbar_label" class="text_pole" type="text" placeholder="Director">
+                                </label>
+                                <label>Font Awesome icon classes
+                                    <input id="story_workshop_agent_toolbar_icon" class="text_pole" type="text" placeholder="fa-solid fa-compass">
+                                </label>
+                                <label>Toolbar order
+                                    <input id="story_workshop_agent_toolbar_order" class="text_pole" type="number" min="0" max="999">
+                                </label>
+                            </div>
                         </div>
                         <button id="story_workshop_save_agent" class="menu_button menu_button_icon">
                             <i class="fa-solid fa-floppy-disk"></i>
