@@ -176,6 +176,7 @@ function getSettings() {
     settings.assistMode ??= 'suggest';
     settings.assistEvery ??= 4;
     settings.confirmQuickActions ??= false;
+    settings.lastArcDesire ??= '';
     settings.characterProfiles ??= {};
     settings.toolbarActions ??= clone(DEFAULT_TOOLBAR_ACTIONS);
     if (!settings.arcToolbarMigrated) {
@@ -1473,7 +1474,7 @@ function parseJsonLoose(text) {
 
 function refreshArcView() {
     const arc = getChatState().arc;
-    $('#story_workshop_arc_desire').val(arc?.desire || '');
+    $('#story_workshop_arc_desire').val(arc?.desire || getSettings().lastArcDesire || '');
     $('#story_workshop_arc_reveal').prop('checked', Boolean(arc?.reveal));
     $('#story_workshop_arc_log_chat').prop('checked', Boolean(arc?.logToChat));
     $('#story_workshop_arc_pause').text(arc?.paused ? 'Resume monitoring' : 'Pause monitoring');
@@ -1502,6 +1503,8 @@ async function designArc() {
         toastr.warning('Describe the experience you want first.');
         return;
     }
+    getSettings().lastArcDesire = desire;
+    saveSettingsDebounced();
     const designer = getAgentById('arc.designer');
     const result = designer ? await executeAgent(designer, desire) : null;
     if (!result) {

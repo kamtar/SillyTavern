@@ -78,7 +78,7 @@ import { MEDIA_DISPLAY, MEDIA_SOURCE, MEDIA_TYPE, SCROLL_BEHAVIOR, SWIPE_DIRECTI
 const fileSizeLimit = 1024 * 1024 * 350; // 350 MB
 const CHAT_IMAGE_MAX_SIDE = 800;
 const CHAT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024;
-const CHAT_IMAGE_WEBP_QUALITY = 0.82;
+const CHAT_IMAGE_JPEG_QUALITY = 0.82;
 const ATTACHMENT_SOURCE = {
     GLOBAL: 'global',
     CHARACTER: 'character',
@@ -131,12 +131,12 @@ async function prepareChatImageUpload(file) {
             originalDataUrl,
             CHAT_IMAGE_MAX_SIDE,
             CHAT_IMAGE_MAX_SIDE,
-            'image/webp',
-            CHAT_IMAGE_WEBP_QUALITY,
+            'image/jpeg',
+            CHAT_IMAGE_JPEG_QUALITY,
         );
         return {
             base64Data: compressedDataUrl.split(',')[1],
-            extension: 'webp',
+            extension: 'jpg',
             compressed: true,
         };
     } catch (error) {
