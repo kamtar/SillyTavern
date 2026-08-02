@@ -1,4 +1,4 @@
-import { appendMediaToMessage, eventSource, event_types, main_api, saveChatConditional } from '../../../script.js';
+import { appendMediaToMessage, chat_metadata, eventSource, event_types, main_api, saveChatConditional } from '../../../script.js';
 import { getContext } from '../../extensions.js';
 import { chat_completion_sources, getChatCompletionModel, oai_settings } from '../../openai.js';
 import { textgen_types, textgenerationwebui_settings } from '../../textgen-settings.js';
@@ -12,6 +12,7 @@ const MAX_KOBOLDCPP_IMAGES = 16;
 const MAX_KOBOLDCPP_IMAGE_SIDE = 800;
 const MAX_KOBOLDCPP_IMAGE_BYTES = 2 * 1024 * 1024;
 const KOBOLDCPP_IMAGE_QUALITY = 0.82;
+const CONTEXT_SELECTION_VERSION = 3;
 
 function isChatCompletionKoboldCppActive() {
     return main_api === 'openai'
@@ -72,6 +73,46 @@ async function initializeMessageMedia(message) {
     return changed;
 }
 
+function getManageableAttachments() {
+    return getContext().chat
+        .flatMap(message => Array.isArray(message?.extra?.media) ? message.extra.media : [])
+        .filter(shouldManageAttachment);
+}
+
+function selectOnlyNewestAttachment() {
+    const attachments = getManageableAttachments();
+    const newestAttachment = attachments.at(-1);
+    let changed = false;
+
+    for (const mediaAttachment of attachments) {
+        const includeInContext = mediaAttachment === newestAttachment;
+        if (mediaAttachment.include_in_context !== includeInContext) {
+            mediaAttachment.include_in_context = includeInContext;
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+function renderChatMedia() {
+    const context = getContext();
+
+    $('.mes').each(function () {
+        const messageId = Number($(this).attr('mesid'));
+        if (isNaN(messageId)) {
+            return;
+        }
+
+        const message = context.chat[messageId];
+        if (!Array.isArray(message?.extra?.media) || message.extra.media.length === 0) {
+            return;
+        }
+
+        appendMediaToMessage(message, $(this), SCROLL_BEHAVIOR.KEEP);
+    });
+}
+
 async function initializeChatMedia({ save = false, rerender = false } = {}) {
     syncBodyClass();
 
@@ -86,20 +127,15 @@ async function initializeChatMedia({ save = false, rerender = false } = {}) {
         changed = await initializeMessageMedia(message) || changed;
     }
 
+    if (getManageableAttachments().length > 0
+        && chat_metadata.imageContextSelectionVersion !== CONTEXT_SELECTION_VERSION) {
+        changed = selectOnlyNewestAttachment() || changed;
+        chat_metadata.imageContextSelectionVersion = CONTEXT_SELECTION_VERSION;
+        changed = true;
+    }
+
     if (rerender) {
-        $('.mes').each(function () {
-            const messageId = Number($(this).attr('mesid'));
-            if (isNaN(messageId)) {
-                return;
-            }
-
-            const message = context.chat[messageId];
-            if (!Array.isArray(message?.extra?.media) || message.extra.media.length === 0) {
-                return;
-            }
-
-            appendMediaToMessage(message, $(this), SCROLL_BEHAVIOR.KEEP);
-        });
+        renderChatMedia();
     }
 
     if (changed && save) {
@@ -115,11 +151,17 @@ async function handleMessageMedia(messageId) {
     }
 
     const message = getContext().chat[messageId];
+    const changed = await initializeMessageMedia(message);
+    const hasManagedMedia = Array.isArray(message?.extra?.media)
+        && message.extra.media.some(shouldManageAttachment);
 
-    if (!await initializeMessageMedia(message)) {
+    if (!changed && !hasManagedMedia) {
         return;
     }
 
+    selectOnlyNewestAttachment();
+    chat_metadata.imageContextSelectionVersion = CONTEXT_SELECTION_VERSION;
+    renderChatMedia();
     await saveChatConditional();
 }
 
