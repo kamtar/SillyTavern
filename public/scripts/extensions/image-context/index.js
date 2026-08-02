@@ -1,14 +1,14 @@
-import { appendMediaToMessage, eventSource, event_types, getMediaDisplay, getMediaIndex, main_api, saveChatConditional } from '../../../script.js';
+import { appendMediaToMessage, eventSource, event_types, main_api, saveChatConditional } from '../../../script.js';
 import { getContext } from '../../extensions.js';
 import { chat_completion_sources, getChatCompletionModel, oai_settings } from '../../openai.js';
 import { textgen_types, textgenerationwebui_settings } from '../../textgen-settings.js';
 import { getBase64Async, isDataURL } from '../../utils.js';
-import { MEDIA_DISPLAY, MEDIA_TYPE, SCROLL_BEHAVIOR } from '../../constants.js';
+import { MEDIA_TYPE, SCROLL_BEHAVIOR } from '../../constants.js';
 
 const MODULE_NAME = 'image-context';
 const CHAT_COMPLETION_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO]);
 const TEXT_COMPLETION_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE]);
-const MAX_KOBOLDCPP_IMAGES = 4;
+const MAX_KOBOLDCPP_IMAGES = 16;
 
 function isChatCompletionKoboldCppActive() {
     return main_api === 'openai'
@@ -51,7 +51,7 @@ function ensureAttachmentContextState(mediaAttachment) {
         return false;
     }
 
-    mediaAttachment.include_in_context = false;
+    mediaAttachment.include_in_context = true;
     return true;
 }
 
@@ -123,11 +123,6 @@ async function handleMessageMedia(messageId) {
 function getMessageMediaForContext(message) {
     if (!Array.isArray(message?.extra?.media) || message.extra.media.length === 0) {
         return [];
-    }
-
-    if (getMediaDisplay(message) === MEDIA_DISPLAY.GALLERY) {
-        const mediaAttachment = message.extra.media[getMediaIndex(message)];
-        return mediaAttachment ? [mediaAttachment] : [];
     }
 
     return message.extra.media;

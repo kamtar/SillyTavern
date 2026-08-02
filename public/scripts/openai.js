@@ -982,8 +982,11 @@ async function populateChatHistory(messages, prompts, chatCompletion, type = nul
                 }
             }
             if (chatPrompt.mediaDisplay === MEDIA_DISPLAY.GALLERY) {
-                const media = chatPrompt.media[chatPrompt.mediaIndex];
-                await inlineMediaAttachment(media);
+                const hasContextSelection = chatPrompt.media.some(media => media?.include_in_context !== undefined);
+                const media = hasContextSelection ? chatPrompt.media : [chatPrompt.media[chatPrompt.mediaIndex]];
+                for (const mediaAttachment of media) {
+                    await inlineMediaAttachment(mediaAttachment);
+                }
             }
         }
 
