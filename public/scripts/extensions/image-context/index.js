@@ -2,13 +2,16 @@ import { appendMediaToMessage, eventSource, event_types, main_api, saveChatCondi
 import { getContext } from '../../extensions.js';
 import { chat_completion_sources, getChatCompletionModel, oai_settings } from '../../openai.js';
 import { textgen_types, textgenerationwebui_settings } from '../../textgen-settings.js';
-import { getBase64Async, isDataURL } from '../../utils.js';
+import { createThumbnail, getBase64Async, getImageSizeFromDataURL, isDataURL } from '../../utils.js';
 import { MEDIA_TYPE, SCROLL_BEHAVIOR } from '../../constants.js';
 
 const MODULE_NAME = 'image-context';
 const CHAT_COMPLETION_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO]);
 const TEXT_COMPLETION_MEDIA_TYPES = new Set([MEDIA_TYPE.IMAGE]);
 const MAX_KOBOLDCPP_IMAGES = 16;
+const MAX_KOBOLDCPP_IMAGE_SIDE = 800;
+const MAX_KOBOLDCPP_IMAGE_BYTES = 2 * 1024 * 1024;
+const KOBOLDCPP_IMAGE_QUALITY = 0.82;
 
 function isChatCompletionKoboldCppActive() {
     return main_api === 'openai'
@@ -139,17 +142,38 @@ function extractBase64FromDataUrl(url) {
     return isDataURL(url) ? url.split(',', 2)[1] || null : null;
 }
 
+async function normalizeKoboldCppImage(dataUrl) {
+    const mimeType = dataUrl?.split(';')?.[0]?.split(':')?.[1];
+    const dataSize = dataUrl.length * 0.75;
+    const safeMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const { width, height } = await getImageSizeFromDataURL(dataUrl);
+
+    if (Math.max(width, height) <= MAX_KOBOLDCPP_IMAGE_SIDE
+        && dataSize <= MAX_KOBOLDCPP_IMAGE_BYTES
+        && safeMimeTypes.includes(mimeType)) {
+        return dataUrl;
+    }
+
+    return createThumbnail(
+        dataUrl,
+        MAX_KOBOLDCPP_IMAGE_SIDE,
+        MAX_KOBOLDCPP_IMAGE_SIDE,
+        'image/jpeg',
+        KOBOLDCPP_IMAGE_QUALITY,
+    );
+}
+
 async function convertAttachmentToBase64(mediaAttachment) {
     if (!mediaAttachment?.url) {
         return null;
     }
 
-    const base64 = extractBase64FromDataUrl(mediaAttachment.url);
-    if (base64) {
-        return base64;
-    }
-
     try {
+        if (isDataURL(mediaAttachment.url)) {
+            const normalizedDataUrl = await normalizeKoboldCppImage(mediaAttachment.url);
+            return extractBase64FromDataUrl(normalizedDataUrl);
+        }
+
         const response = await fetch(mediaAttachment.url, { method: 'GET', cache: 'force-cache' });
         if (!response.ok) {
             throw new Error('Failed to fetch image');
@@ -157,7 +181,8 @@ async function convertAttachmentToBase64(mediaAttachment) {
 
         const blob = await response.blob();
         const dataUrl = await getBase64Async(blob);
-        return extractBase64FromDataUrl(dataUrl);
+        const normalizedDataUrl = await normalizeKoboldCppImage(dataUrl);
+        return extractBase64FromDataUrl(normalizedDataUrl);
     } catch (error) {
         console.error('Image context attachment skipped', error);
         return null;

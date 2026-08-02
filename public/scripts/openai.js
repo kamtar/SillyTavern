@@ -3548,6 +3548,9 @@ class Message {
         }
 
         image = await this.compressImage(image);
+        if (!image) {
+            return;
+        }
 
         const quality = oai_settings.inline_image_quality || default_settings.inline_image_quality;
         this.content.push({ type: 'image_url', image_url: { 'url': image, 'detail': quality } });
@@ -3633,7 +3636,7 @@ class Message {
     /**
      * Compress an image if it exceeds the size threshold for the current chat completion source.
      * @param {string} image Data URL of the image.
-     * @returns {Promise<string>} Compressed image as a Data URL.
+     * @returns {Promise<string|null>} Compressed image as a Data URL, or null if it cannot be decoded.
      */
     async compressImage(image) {
         const compressImageSources = [
@@ -3646,6 +3649,28 @@ class Message {
         const dataSize = image.length * 0.75;
         const safeMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
         const mimeType = image?.split(';')?.[0]?.split(':')?.[1];
+        const isKoboldCpp = oai_settings.chat_completion_source === chat_completion_sources.CUSTOM
+            && /^koboldcpp\/.+/.test(getChatCompletionModel() || '');
+
+        // KoboldCpp's payload limit also applies to the decoded bitmap, not just
+        // the encoded request. A phone photo can be well under 2 MB on disk but
+        // exceed the default 32 MB limit once decoded (width * height * channels).
+        // Normalize here as well as on upload so legacy chat images and uploads
+        // whose original conversion failed cannot break every later request.
+        if (isKoboldCpp) {
+            try {
+                const maxSide = 800;
+                const { width, height } = await getImageSizeFromDataURL(image);
+                if (Math.max(width, height) > maxSide || dataSize > sizeThreshold || !safeMimeTypes.includes(mimeType)) {
+                    image = await createThumbnail(image, maxSide, maxSide, 'image/jpeg', 0.82);
+                }
+                return image;
+            } catch (error) {
+                console.error('KoboldCpp image normalization failed; skipping image', error);
+                return null;
+            }
+        }
+
         if (compressImageSources.includes(oai_settings.chat_completion_source) && dataSize > sizeThreshold) {
             const maxSide = 2048;
             image = await createThumbnail(image, maxSide, maxSide);
