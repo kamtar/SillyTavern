@@ -126,6 +126,10 @@
         "start:bun": "bun server.js",
         "start:no-csrf": "node server.js --disableCsrf",
         "lint": "eslint \"src/**/*.js\" \"public/**/*.js\" ./*.js",
+        "lint:tests": "npm --prefix tests run lint",
+        "test": "npm --prefix tests run test:unit",
+        "test:unit": "npm --prefix tests run test:unit",
+        "test:e2e": "npm --prefix tests run test:e2e",
         "lint:fix": "eslint \"src/**/*.js\" \"public/**/*.js\" ./*.js --fix",
         "plugins:update": "node plugins update",
         "plugins:install": "node plugins install"

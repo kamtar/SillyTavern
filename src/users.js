@@ -681,6 +681,10 @@ export async function getAllUserHandles() {
  * @returns {UserDirectoryList} User directories
  */
 export function getUserDirectories(handle) {
+    if (typeof handle !== 'string' || !handle || handle !== path.basename(handle) || handle === '.' || handle === '..') {
+        throw new Error('Invalid user handle');
+    }
+
     if (DIRECTORIES_CACHE.has(handle)) {
         const cache = DIRECTORIES_CACHE.get(handle);
         if (cache) {

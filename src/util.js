@@ -1538,25 +1538,28 @@ export function readFirstLine(filePath) {
     const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
     const rl = readline.createInterface({ input: stream });
     return new Promise((resolve, reject) => {
-        let resolved = false;
-        rl.on('line', line => {
-            resolved = true;
+        let settled = false;
+        const finish = (callback, value) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
             rl.close();
-            stream.close();
-            resolve(line);
+            stream.destroy();
+            callback(value);
+        };
+
+        rl.on('line', line => {
+            finish(resolve, line);
         });
 
-        rl.on('error', error => {
-            resolved = true;
-            reject(error);
-        });
+        const handleError = error => finish(reject, error);
+        rl.once('error', handleError);
+        stream.once('error', handleError);
 
         // Handle empty files
         stream.on('end', () => {
-            if (!resolved) {
-                resolved = true;
-                resolve('');
-            }
+            finish(resolve, '');
         });
     });
 }

@@ -83,6 +83,7 @@ export class KokoroTtsProvider {
             try {
                 // Terminate the existing worker if it exists
                 if (this.worker) {
+                    this.rejectPendingRequests(new Error('Kokoro worker was restarted'));
                     this.worker.terminate();
                     $('#kokoro_status_text').text('Initializing...').removeAttr('style');
                 }
@@ -92,6 +93,18 @@ export class KokoroTtsProvider {
 
                 // Set up message handling
                 this.worker.onmessage = this.handleWorkerMessage.bind(this);
+                this.worker.onerror = () => {
+                    const error = new Error('Kokoro worker failed');
+                    this.ready = false;
+                    this.rejectPendingRequests(error);
+                    this.updateStatusDisplay();
+                };
+                this.worker.onmessageerror = () => {
+                    const error = new Error('Kokoro worker message could not be deserialized');
+                    this.ready = false;
+                    this.rejectPendingRequests(error);
+                    this.updateStatusDisplay();
+                };
 
                 // Initialize the worker with the current settings
                 this.worker.postMessage({
@@ -189,6 +202,13 @@ export class KokoroTtsProvider {
         const statusText = this.ready ? 'Ready' : 'Failed';
         const statusColor = this.ready ? 'green' : 'red';
         $('#kokoro_status_text').text(statusText).css('color', statusColor);
+    }
+
+    rejectPendingRequests(error) {
+        for (const request of this.pendingRequests.values()) {
+            request.reject(error);
+        }
+        this.pendingRequests.clear();
     }
 
     async checkReady() {
@@ -344,9 +364,11 @@ export class KokoroTtsProvider {
 
     dispose() {
         // Clean up the worker when the provider is disposed
+        this.rejectPendingRequests(new Error('Kokoro TTS provider was disposed'));
         if (this.worker) {
             this.worker.terminate();
             this.worker = null;
         }
+        this.ready = false;
     }
 }

@@ -338,29 +338,49 @@ let audioQueueProcessorReady = true;
 async function playAudioData(audioJob) {
     const { audioBlob, char } = audioJob;
     // Since current audio job can be cancelled, don't playback if it is null
-    if (currentAudioJob == null) {
+    if (currentAudioJob !== audioJob) {
         console.log('Cancelled TTS playback because currentAudioJob was null');
+        return;
     }
     if (audioBlob instanceof Blob) {
         const srcUrl = await getBase64Async(audioBlob);
+
+        if (currentAudioJob !== audioJob) {
+            return;
+        }
 
         // VRM lip sync
         if (extension_settings.vrm?.enabled && typeof globalThis.vrmLipSync === 'function') {
             await globalThis.vrmLipSync(audioBlob, char);
         }
 
+        if (currentAudioJob !== audioJob) {
+            return;
+        }
+
         audioElement.src = srcUrl;
     } else if (typeof audioBlob === 'string') {
+        if (currentAudioJob !== audioJob) {
+            return;
+        }
         audioElement.src = audioBlob;
     } else {
         throw `TTS received invalid audio data type ${typeof audioBlob}`;
     }
-    audioElement.addEventListener('ended', completeCurrentAudioJob);
-    audioElement.addEventListener('canplay', () => {
+    $(audioElement).off('ended.tts').one('ended.tts', completeCurrentAudioJob);
+    const startPlayback = () => {
+        if (currentAudioJob !== audioJob) {
+            return;
+        }
         console.debug('Starting TTS playback');
         audioElement.playbackRate = extension_settings.tts.playback_rate;
-        audioElement.play();
-    });
+        audioElement.play().catch(error => {
+            console.error('TTS playback failed', error);
+            completeCurrentAudioJob();
+            void processAudioJobQueue();
+        });
+    };
+    $(audioElement).off('canplay.tts').one('canplay.tts', startPlayback);
 }
 
 globalThis.tts_preview = function (id) {
@@ -481,11 +501,13 @@ async function processAudioJobQueue() {
     try {
         audioQueueProcessorReady = false;
         currentAudioJob = audioJobQueue.shift();
-        playAudioData(currentAudioJob);
+        await playAudioData(currentAudioJob);
     } catch (error) {
         toastr.error(error.toString());
         console.error(error);
+        currentAudioJob = null;
         audioQueueProcessorReady = true;
+        void processAudioJobQueue();
     }
 }
 

@@ -4,13 +4,13 @@ import yaml from 'yaml';
 import color from 'chalk';
 import _ from 'lodash';
 import { serverDirectory } from './server-directory.js';
-import { keyToEnv, setConfigFilePath } from './util.js';
+import { keyToEnv, setConfigFilePath, toBoolean } from './util.js';
 
 const keyMigrationMap = [
     {
         oldKey: 'disableThumbnails',
         newKey: 'thumbnails.enabled',
-        migrate: (value) => !value,
+        migrate: (value) => !toBoolean(value),
     },
     {
         oldKey: 'thumbnailsQuality',
@@ -20,12 +20,12 @@ const keyMigrationMap = [
     {
         oldKey: 'avatarThumbnailsPng',
         newKey: 'thumbnails.format',
-        migrate: (value) => (value ? 'png' : 'jpg'),
+        migrate: (value) => (toBoolean(value) ? 'png' : 'jpg'),
     },
     {
         oldKey: 'disableChatBackup',
         newKey: 'backups.chat.enabled',
-        migrate: (value) => !value,
+        migrate: (value) => !toBoolean(value),
     },
     {
         oldKey: 'numberOfBackups',
@@ -45,17 +45,17 @@ const keyMigrationMap = [
     {
         oldKey: 'enableExtensions',
         newKey: 'extensions.enabled',
-        migrate: (value) => value,
+        migrate: (value) => toBoolean(value),
     },
     {
         oldKey: 'enableExtensionsAutoUpdate',
         newKey: 'extensions.autoUpdate',
-        migrate: (value) => value,
+        migrate: (value) => toBoolean(value),
     },
     {
         oldKey: 'extras.disableAutoDownload',
         newKey: 'extensions.models.autoDownload',
-        migrate: (value) => !value,
+        migrate: (value) => !toBoolean(value),
     },
     {
         oldKey: 'extras.classificationModel',
@@ -101,7 +101,7 @@ const keyMigrationMap = [
     {
         oldKey: 'autorun',
         newKey: 'browserLaunch.enabled',
-        migrate: (value) => value,
+        migrate: (value) => toBoolean(value),
     },
     {
         oldKey: 'autorunHostname',
@@ -116,7 +116,7 @@ const keyMigrationMap = [
     {
         oldKey: 'avoidLocalhost',
         newKey: 'browserLaunch.avoidLocalhost',
-        migrate: (value) => value,
+        migrate: (value) => toBoolean(value),
     },
     {
         oldKey: 'extras.promptExpansionModel',
@@ -127,12 +127,12 @@ const keyMigrationMap = [
     {
         oldKey: 'autheliaAuth',
         newKey: 'sso.autheliaAuth',
-        migrate: (value) => value,
+        migrate: (value) => toBoolean(value),
     },
     {
         oldKey: 'authentikAuth',
         newKey: 'sso.authentikAuth',
-        migrate: (value) => value,
+        migrate: (value) => toBoolean(value),
     },
 ];
 

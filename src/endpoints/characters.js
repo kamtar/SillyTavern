@@ -1035,12 +1035,16 @@ router.post('/create', getFileNameValidationFunction('file_name'), async functio
         if (!fs.existsSync(chatsPath)) fs.mkdirSync(chatsPath);
 
         if (!request.file) {
-            await writeCharacterData(DEFAULT_AVATAR_PATH, char, internalName, request);
+            if (!await writeCharacterData(DEFAULT_AVATAR_PATH, char, internalName, request)) {
+                throw new Error('Failed to write character data');
+            }
             return response.send(avatarName);
         } else {
             const crop = tryParse(request.query.crop);
             const uploadPath = path.join(request.file.destination, request.file.filename);
-            await writeCharacterData(uploadPath, char, internalName, request, crop);
+            if (!await writeCharacterData(uploadPath, char, internalName, request, crop)) {
+                throw new Error('Failed to write character data');
+            }
             fs.unlinkSync(uploadPath);
             return response.send(avatarName);
         }
@@ -1077,7 +1081,9 @@ router.post('/rename', validateAvatarUrlMiddleware, async function (request, res
         const newData = JSON.stringify(oldData);
 
         // Write data to new location
-        await writeCharacterData(oldAvatarPath, newData, newInternalName, request);
+        if (!await writeCharacterData(oldAvatarPath, newData, newInternalName, request)) {
+            throw new Error('Failed to write character data');
+        }
 
         // Rename chats folder
         if (fs.existsSync(oldChatsPath) && !fs.existsSync(newChatsPath)) {
@@ -1118,12 +1124,16 @@ router.post('/edit', validateAvatarUrlMiddleware, async function (request, respo
     try {
         if (!request.file) {
             const avatarPath = path.join(request.user.directories.characters, request.body.avatar_url);
-            await writeCharacterData(avatarPath, char, targetFile, request);
+            if (!await writeCharacterData(avatarPath, char, targetFile, request)) {
+                throw new Error('Failed to write character data');
+            }
         } else {
             const crop = tryParse(request.query.crop);
             const newAvatarPath = path.join(request.file.destination, request.file.filename);
             invalidateThumbnail(request.user.directories, 'avatar', request.body.avatar_url);
-            await writeCharacterData(newAvatarPath, char, targetFile, request, crop);
+            if (!await writeCharacterData(newAvatarPath, char, targetFile, request, crop)) {
+                throw new Error('Failed to write character data');
+            }
             fs.unlinkSync(newAvatarPath);
 
             // Bust cache to reload the new avatar
@@ -1162,7 +1172,9 @@ router.post('/edit-avatar', validateAvatarUrlMiddleware, async function (request
 
         const crop = tryParse(request.query.crop);
         const fileName = request.body.avatar_url.replace('.png', '');
-        await writeCharacterData(uploadPath, data, fileName, request, crop);
+        if (!await writeCharacterData(uploadPath, data, fileName, request, crop)) {
+            throw new Error('Failed to write character data');
+        }
 
         // Remove uploaded temp file
         fs.unlinkSync(uploadPath);
@@ -1221,7 +1233,9 @@ router.post('/edit-attribute', validateAvatarUrlMiddleware, async function (requ
         char.data[request.body.field] = request.body.value;
         let newCharJSON = JSON.stringify(char);
         const targetFile = (request.body.avatar_url).replace('.png', '');
-        await writeCharacterData(avatarPath, newCharJSON, targetFile, request);
+        if (!await writeCharacterData(avatarPath, newCharJSON, targetFile, request)) {
+            throw new Error('Failed to write character data');
+        }
         return response.sendStatus(200);
     } catch (err) {
         console.error('An error occurred, character edit invalidated.', err);
@@ -1297,7 +1311,9 @@ async function mergeCharacterUpdate(avatarPath, avatar, updateData, request, sho
     }
 
     const targetImg = avatar.replace('.png', '');
-    await writeCharacterData(avatarPath, JSON.stringify(character), targetImg, request);
+    if (!await writeCharacterData(avatarPath, JSON.stringify(character), targetImg, request)) {
+        return { ok: false, error: 'Failed to write character file' };
+    }
     return { ok: true };
 }
 

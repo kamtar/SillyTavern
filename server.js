@@ -14,4 +14,5 @@ try {
     await import('./src/server-main.js');
 } catch (error) {
     console.error('A critical error has occurred while starting the server:', error);
+    process.exitCode = 1;
 }

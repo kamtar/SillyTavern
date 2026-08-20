@@ -266,7 +266,13 @@ if (cliArgs.enableCorsProxy) {
 
 // File uploads
 const uploadsPath = path.join(cliArgs.dataRoot, UPLOADS_DIRECTORY);
-app.use(multer({ dest: uploadsPath, limits: { fieldSize: 500 * 1024 * 1024 } }).single('avatar'));
+app.use(multer({
+    dest: uploadsPath,
+    limits: {
+        fieldSize: 500 * 1024 * 1024,
+        fileSize: 500 * 1024 * 1024,
+    },
+}).single('avatar'));
 app.use(multerMonkeyPatch);
 
 app.get('/version', async function (_, response) {
@@ -486,4 +492,8 @@ initUserStorage(globalThis.DATA_ROOT)
     .then(preSetupTasks)
     .then(apply404Middleware)
     .then(() => new ServerStartup(app, cliArgs).start())
-    .then(postSetupTasks);
+    .then(postSetupTasks)
+    .catch(error => {
+        console.error('A critical error has occurred while starting the server:', error);
+        process.exitCode = 1;
+    });

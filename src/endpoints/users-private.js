@@ -152,13 +152,21 @@ router.post('/backup', async (request, response) => {
             return response.status(403).json({ error: 'Full data backup is disabled' });
         }
 
-        const handle = request.body.handle;
+        const requestedHandle = request.body.handle;
 
-        if (!handle) {
+        if (typeof requestedHandle !== 'string' || !requestedHandle) {
             console.warn('Backup failed: Missing required fields');
             return response.status(400).json({ error: 'Missing required fields' });
         }
 
+        /** @type {import('../users.js').User} */
+        const user = await storage.getItem(toKey(requestedHandle));
+        if (!user) {
+            console.warn('Backup failed: User not found');
+            return response.status(404).json({ error: 'User not found' });
+        }
+
+        const handle = user.handle;
         if (handle !== request.user.profile.handle && !request.user.profile.admin) {
             console.error('Backup failed: Unauthorized');
             return response.status(403).json({ error: 'Unauthorized' });

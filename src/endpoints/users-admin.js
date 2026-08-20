@@ -223,21 +223,34 @@ router.post('/delete', requireAdminMiddleware, async (request, response) => {
             return response.status(400).json({ error: 'Missing required fields' });
         }
 
-        if (request.body.handle === request.user.profile.handle) {
+        const requestedHandle = request.body.handle;
+        if (typeof requestedHandle !== 'string' || !requestedHandle) {
+            console.warn('Delete user failed: Missing required fields');
+            return response.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const user = await storage.getItem(toKey(requestedHandle));
+        if (!user) {
+            console.warn('Delete user failed: User not found');
+            return response.status(404).json({ error: 'User not found' });
+        }
+
+        const handle = user.handle;
+        if (handle === request.user.profile.handle) {
             console.warn('Delete user failed: Cannot delete yourself');
             return response.status(400).json({ error: 'Cannot delete yourself' });
         }
 
-        if (request.body.handle === DEFAULT_USER.handle) {
+        if (handle === DEFAULT_USER.handle) {
             console.warn('Delete user failed: Cannot delete default user');
             return response.status(400).json({ error: 'Sorry, but the default user cannot be deleted. It is required as a fallback.' });
         }
 
-        await storage.removeItem(toKey(request.body.handle));
+        await storage.removeItem(toKey(handle));
 
         if (request.body.purge) {
-            const directories = getUserDirectories(request.body.handle);
-            console.info('Deleting data directories for', request.body.handle);
+            const directories = getUserDirectories(handle);
+            console.info('Deleting data directories for', handle);
             await fsPromises.rm(directories.root, { recursive: true, force: true });
         }
 

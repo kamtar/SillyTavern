@@ -201,7 +201,8 @@ function importCAIChat(userName, characterName, jsonData) {
         return [starter, ...historyData];
     }
 
-    const newChats = (jsonData.histories.histories ?? []).map(history => newChats.push(convert(history).map(obj => JSON.stringify(obj)).join('\n')));
+    const newChats = (jsonData.histories.histories ?? [])
+        .map(history => convert(history).map(obj => JSON.stringify(obj)).join('\n'));
     return newChats;
 }
 
@@ -647,19 +648,39 @@ router.post('/export', validateAvatarUrlMiddleware, async function (request, res
             input: readStream,
         });
         let buffer = '';
-        rl.on('line', (line) => {
-            const data = JSON.parse(line);
-            // Skip non-printable/prompt-hidden messages
-            if (data.is_system) {
+        let failed = false;
+        const fail = (error, status = 500) => {
+            if (failed || response.headersSent) {
                 return;
             }
-            if (data.mes) {
-                const name = data.name;
-                const message = (data?.extra?.display_text || data?.mes || '').replace(/\r?\n/g, '\n');
-                buffer += (`${name}: ${message}\n\n`);
+            failed = true;
+            console.error('chat export failed.', error);
+            rl.close();
+            readStream.destroy();
+            response.sendStatus(status);
+        };
+
+        rl.on('line', (line) => {
+            try {
+                const data = JSON.parse(line);
+                // Skip non-printable/prompt-hidden messages
+                if (data.is_system) {
+                    return;
+                }
+                if (data.mes) {
+                    const name = data.name;
+                    const message = (data?.extra?.display_text || data?.mes || '').replace(/\r?\n/g, '\n');
+                    buffer += (`${name}: ${message}\n\n`);
+                }
+            } catch (error) {
+                fail(error, 400);
             }
         });
+        readStream.on('error', error => fail(error));
         rl.on('close', () => {
+            if (failed || response.headersSent) {
+                return;
+            }
             const successMessage = {
                 message: `Chat saved to ${exportfilename}`,
                 result: buffer,

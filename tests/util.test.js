@@ -1,9 +1,11 @@
 import { afterEach, describe, test, expect, jest } from '@jest/globals';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { once } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { Response } from 'node-fetch';
 import { CHAT_COMPLETION_SOURCES } from '../src/constants';
-import { flattenSchema, forwardFetchResponse } from '../src/util';
+import { flattenSchema, forwardFetchResponse, readFirstLine } from '../src/util';
 
 function createMockExpressResponse() {
     const response = new PassThrough();
@@ -162,5 +164,13 @@ describe('forwardFetchResponse', () => {
         expect(await bodyPromise).toBe(body);
         expect(response.statusCode).toBe(502);
         expect(warnSpy).toHaveBeenCalledWith(`Streaming request failed with status 502 Bad Gateway: ${body}`);
+    });
+});
+
+describe('readFirstLine', () => {
+    test('rejects when the file cannot be opened', async () => {
+        const missingPath = path.join(tmpdir(), `sillytavern-missing-${Date.now()}.txt`);
+
+        await expect(readFirstLine(missingPath)).rejects.toThrow();
     });
 });

@@ -2222,7 +2222,7 @@ export function appendMediaToMessage(mes, messageElement, scrollBehavior = SCROL
                 resolve();
             }
             if (image.prop('complete')) {
-                onLoad();
+                image[0].naturalWidth > 0 ? onLoad() : onError();
             } else {
                 image.off('load').on('load', onLoad);
                 image.off('error').on('error', onError);
@@ -2640,7 +2640,7 @@ export function updateMessageElement(mes, { messageId = chat.length - 1, message
 
     updateMessageItemizedPromptButton(mes, { messageId, messageElement });
 
-    messageElement.find('.avatar img').on('error', function () {
+    messageElement.find('.avatar img').off('error.avatar').on('error.avatar', function () {
         $(this).hide();
         $(this).parent().html('<div class="missing-avatar fa-solid fa-user-slash"></div>');
     });
